@@ -1,0 +1,9 @@
+'use client'
+import type { Submission, Opportunity } from '@/types'
+import { ArrowUpRight } from 'lucide-react'
+export function SubmissionProgress({submission:s,opportunity:o}:{submission:Submission;opportunity?:Opportunity}) {
+  const notSelected=!!o?.selectedSubmissionId && o.selectedSubmissionId!=='0' && o.selectedSubmissionId!==s.id
+  const paid=s.status==='Paid' || !!s.payoutTxHash
+  const review=notSelected?'Not selected':paid || s.status==='Approved'?'Winner approved':s.status==='Pending'?'Awaiting review':s.status
+  return <div className="mt-4 space-y-3"><div className="cc-workflow"><div><p>01 · Publisher review</p><strong>{review}</strong></div><div><p>02 · {s.demo?'Demo PR':'GitHub PR'}</p><strong>{s.demo?'Simulated '+s.prState:s.identityVerified?s.prState==='merged'?'Merged':s.prState:'Unverified'}</strong></div><div><p>03 · Escrow payment</p><strong className={paid?'!text-[#b0e5c5]':''}>{paid?'Paid on Sepolia':o?.state==='Refunded'?'Refunded':s.status==='Approved'?'Awaiting publisher':'Not paid'}</strong></div></div>{s.payoutTxHash && <a className="cc-link inline-flex items-center gap-1 text-[10px]" href={'https://sepolia.etherscan.io/tx/'+s.payoutTxHash} target="_blank" rel="noreferrer">Payment receipt<ArrowUpRight className="w-3 h-3" /></a>}{s.demo && <p className="text-[10px] text-[#93856d]">Demo PR · GitHub identity and merge are simulated. Wallet payments are real Sepolia ETH.</p>}{s.identityVerified && <p className="text-[10px] text-[#656571]">Last sync: {s.lastSyncedAt || 'Never'} · Commit: {s.prCommit?.slice(0,12) || 'Unknown'}</p>}{s.syncError && <p className="text-[11px] text-[#e8cc95]">{s.syncError}</p>}{!s.identityVerified && !s.demo && <p className="text-[11px] text-[#e8cc95]">Unverified author. Application review and payout are unavailable.</p>}</div>
+}

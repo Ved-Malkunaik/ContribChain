@@ -1,0 +1,127 @@
+'use client'
+
+import { use, useState, Suspense } from 'react'
+import Link from 'next/link'
+import { useAccount } from 'wagmi'
+import { Calendar, ChevronRight, GitPullRequest, CheckCircle2, Clock, ExternalLink, ShieldCheck, Send, Lock, ArrowLeft } from 'lucide-react'
+import { SubmissionProgress } from '@/components/SubmissionProgress'
+import { EscrowReadout } from '@/components/EscrowReadout'
+import { useFeed, useTransaction, useNow } from '@/lib/use-platform'
+import { IdentityPanel, FeedStatus, TransactionStatus } from '@/components/PlatformStatus'
+import { PageHeader, StatusBadge, EmptyState } from '@/components/ui/AppUI'
+
+function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
+  const { data, isLoading } = useFeed()
+  const tx = useTransaction()
+  const now = useNow()
+  const oppId = use(params).id
+  const { isConnected } = useAccount()
+  const opportunity = data.opportunities.find((o) => o.id === oppId)
+  const project = opportunity ? data.projects.find((p) => p.id === opportunity.projectId) : null
+  const submissions = data.submissions.filter((s) => s.opportunityId === oppId)
+  const [prUrl, setPrUrl] = useState('')
+  const [notes, setNotes] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  if (isLoading) return <div className="cc-page"><p className="cc-empty" role="status">Loading opportunity…</p></div>
+  if (!opportunity || !project) return <div className="cc-page"><FeedStatus /><EmptyState title="Opportunity not found" description="The requested bounty opportunity does not exist." action={<Link href="/explore" className="cc-btn cc-btn-primary">Return to explore</Link>} /></div>
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    try { await tx.send('submissions/prepare', { opportunityId: oppId, prUrl, notes }) }
+    catch { /* TransactionStatus displays the error. */ }
+    finally { setIsSubmitting(false) }
+  }
+  const deadlinePassed = !!now && new Date(opportunity.deadline).getTime() <= now
+  const canSubmit = opportunity.state === 'Open' && !!now && !deadlinePassed
+  const closed = opportunity.state !== 'Open' || deadlinePassed
+  const paidWinner = submissions.find(s => s.id === opportunity.selectedSubmissionId || s.status === 'Paid' || s.payoutTxHash)
+
+  return (
+    <div className="cc-page">
+      <FeedStatus /><IdentityPanel /><TransactionStatus tx={tx} />
+      <nav aria-label="Breadcrumb" className="mb-8 flex min-w-0 flex-wrap items-center gap-2 text-xs text-neutral-500">
+        <Link href="/explore" className="hover:text-white">Explore</Link><ChevronRight size={13} />
+        <Link href={`/projects/${project.id}`} className="max-w-full truncate hover:text-white">{project.name}</Link><ChevronRight size={13} />
+        <span className="text-neutral-300">Opportunity {opportunity.onChainId ? `#${opportunity.onChainId}` : 'awaiting sync'}</span>
+      </nav>
+      <PageHeader eyebrow={`${project.name} · ${opportunity.taskType}`} title={opportunity.title}
+        description="Make a contribution. Meet the criteria. Build a reputation that stays on-chain."
+        action={<Link href={`/projects/${project.id}`} className="cc-btn cc-btn-secondary"><ArrowLeft size={15} />View project</Link>} />
+      <div className="mb-8 flex flex-wrap items-center gap-3 border-b border-white/10 pb-7 text-xs text-neutral-400">
+        <StatusBadge status={opportunity.state} /><span className="cc-badge">{opportunity.difficulty}</span>
+        <span className="inline-flex items-center gap-2 sm:ml-3"><Calendar size={14} />Due {new Date(opportunity.deadline).toLocaleDateString()}</span>
+        <span className="inline-flex items-center gap-2"><Lock size={14} />Single winner escrow</span>
+      </div>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-6">
+          <section className="cc-panel">
+            <p className="cc-eyebrow mb-4">01 / THE TASK</p><h2 className="mb-4 text-xl font-semibold tracking-tight text-white">What you’ll build</h2>
+            <p className="whitespace-pre-line text-sm leading-8 text-neutral-400">{opportunity.description}</p>
+            <div className="mt-8 border-t border-white/10 pt-7">
+              <h3 className="mb-4 text-sm font-semibold text-white">Acceptance criteria</h3>
+              <div className="whitespace-pre-line rounded-2xl border border-white/10 bg-black/30 p-5 text-sm leading-8 text-neutral-300">{opportunity.acceptanceCriteria}</div>
+            </div>
+            <div className="mt-7 border-t border-white/10 pt-6"><h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-neutral-500">Bring these skills</h3>
+              <div className="flex flex-wrap gap-2">{opportunity.requiredSkills.map((skill) => <span key={skill} className="cc-badge !font-mono">{skill}</span>)}</div>
+            </div>
+          </section>
+          <section className="cc-panel">
+            <div className="mb-6"><p className="cc-eyebrow mb-4">02 / CONTRIBUTIONS</p><h2 className="text-xl font-semibold tracking-tight text-white">Submitted work <span className="ml-2 text-base text-neutral-500">{submissions.length}</span></h2><p className="mt-2 text-sm leading-6 text-neutral-400">Pull requests and their progress through publisher review.</p></div>
+            <div className="space-y-4">
+              {submissions.map((sub) => <article key={sub.id} className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-5">
+                <div className="mb-4 flex flex-wrap items-center gap-2"><span className="mr-auto text-sm font-semibold text-white">@{sub.githubUsername}</span><span className="cc-badge">PR #{sub.prNumber}</span><StatusBadge status={sub.status} /></div>
+                <p className="text-sm font-medium leading-6 text-neutral-200">{sub.prTitle}</p>
+                <p className="mt-2 text-xs leading-6 text-neutral-500">GitHub: {sub.demo ? `demo ${sub.prState}` : sub.identityVerified ? sub.prState : 'unverified'}</p>
+                <SubmissionProgress submission={sub} opportunity={opportunity} />
+                <div className="mt-4 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-4 xl:flex-row xl:items-center">
+                  <p className="min-w-0 break-all font-mono text-[11px] leading-5 text-neutral-500">Contributor: {sub.contributorAddress}</p>
+                  {sub.demo ? <span className="cc-badge shrink-0" data-tone="warning">Simulated PR · demo</span> : <a href={sub.githubPrUrl} target="_blank" rel="noopener noreferrer" className="cc-btn cc-btn-secondary shrink-0"><GitPullRequest size={14} />View PR<ExternalLink size={12} /></a>}
+                </div>
+              </article>)}
+              {submissions.length === 0 && <div className="rounded-2xl border border-dashed border-white/10 px-6 py-10 text-center"><GitPullRequest size={24} className="mx-auto mb-3 text-neutral-600" /><p className="text-sm text-neutral-300">Be the first to contribute.</p><p className="mt-2 text-xs leading-6 text-neutral-500">Review the criteria and submit your pull request when it’s ready.</p></div>}
+            </div>
+          </section>
+        </div>
+        <aside className="min-w-0 space-y-6">
+          <section className="cc-panel">
+            <p className="cc-eyebrow mb-5">THE REWARD</p>
+            <div className="mb-2 flex flex-wrap items-baseline gap-2"><span className="break-all text-5xl font-medium tracking-tight text-white">{opportunity.rewardEth}</span><span className="text-sm text-neutral-500">Sepolia ETH</span></div>
+            <p className="mb-6 text-xs text-neutral-500">Bounty for the selected contribution</p>
+            <div className="space-y-4 border-y border-white/10 py-5 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-neutral-500">Remaining escrow</span><span className="inline-flex items-center gap-2 text-neutral-200"><ShieldCheck size={14} />{opportunity.remainingEscrowEth} ETH</span></div>
+              <div className="flex flex-wrap justify-between gap-2"><span className="text-neutral-500">Refund policy</span><span className="text-neutral-300">Expired only</span></div>
+              <div className="break-words leading-6"><EscrowReadout onChainId={opportunity.onChainId} /></div>
+            </div>
+            <p className="mt-5 text-xs leading-7 text-neutral-400">{data.demoMode ? 'After publisher approval and the simulated demo merge, the publisher confirms a real Sepolia transfer of the full bounty to the selected contributor wallet.' : 'Once approved and merged on GitHub, the publisher executes on-chain release to transfer the full bounty directly to the winner.'}</p>
+          </section>
+          <section className="cc-panel">
+            <p className="cc-eyebrow mb-4">{closed ? 'OPPORTUNITY OUTCOME' : 'YOUR NEXT MOVE'}</p><h2 className="text-xl font-semibold tracking-tight text-white">{opportunity.state === 'Paid' ? 'Reward completed.' : closed ? 'Submissions closed.' : 'Submit a contribution'}</h2>
+            {closed ? <div role="status" className="mt-5 space-y-4 rounded-2xl border border-white/10 bg-black/30 p-6">
+              <StatusBadge status={opportunity.state === 'Open' ? 'Deadline passed' : opportunity.state} />
+              <p className="text-xs leading-7 text-neutral-400">{opportunity.state === 'Paid' ? `${opportunity.rewardEth} Sepolia ETH was paid to the selected contributor. This opportunity is complete.` : opportunity.state === 'Approved' ? 'The publisher has selected a winner. Payment remains in escrow until the publisher confirms the payout.' : opportunity.state === 'Refunded' ? 'The expired escrow was returned to the publisher.' : 'The deadline has passed. New submissions and winner approvals are closed.'}</p>
+              {opportunity.state === 'Paid' && paidWinner && <><p className="break-all font-mono text-[11px] leading-6 text-neutral-400">Recipient: {paidWinner.contributorAddress}</p>{paidWinner.payoutTxHash && <a href={`https://sepolia.etherscan.io/tx/${paidWinner.payoutTxHash}`} target="_blank" rel="noreferrer" className="cc-btn cc-btn-secondary">View payment receipt <ExternalLink size={13} /></a>}</>}
+              <Link href="/explore" className="cc-link inline-flex items-center gap-2 text-xs">Find another opportunity <ChevronRight size={13} /></Link>
+            </div> : tx.confirmedFor('submitContribution', oppId) ? <div role="status" className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6"><CheckCircle2 size={24} className="mb-4 text-emerald-300" /><h3 className="mb-2 text-sm font-semibold text-white">Submission recorded</h3><p className="text-xs leading-7 text-neutral-400">Your pull request was submitted and queued for publisher review.</p></div>
+              : !isConnected ? <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-6"><Lock size={22} className="mb-4 text-neutral-400" /><h3 className="mb-2 text-sm font-semibold text-white">Connect your wallet to contribute</h3><p className="text-xs leading-7 text-neutral-400">{data.demoMode ? 'Connect MetaMask via the top navigation to submit a demo contribution. The on-chain submission and any payout use this wallet.' : 'Connect MetaMask via the top navigation to verify identity and submit your PR to escrow.'}</p></div>
+              : <form onSubmit={handleSubmit} className="space-y-5">
+                <p className="mt-3 text-xs leading-7 text-neutral-400">Submit and obtain publisher approval before the deadline. Approval fixes the winner; payment requires a separate publisher transaction.</p>
+                <div className="cc-field"><label htmlFor="pull-request-url">{data.demoMode ? 'Demo pull request URL *' : 'GitHub pull request URL *'}</label>
+                  <input id="pull-request-url" type="url" required value={prUrl} onChange={(e) => setPrUrl(e.target.value)} placeholder="https://github.com/owner/repo/pull/123" className="cc-input" />
+                  {data.demoMode && <div className="mt-3 rounded-xl border border-amber-300/15 bg-amber-300/5 p-4"><button type="button" className="text-xs text-amber-200 underline underline-offset-4" onClick={() => setPrUrl(project.repoUrl.replace(/\/$/, '') + '/pull/1')}>Use example demo PR</button><p className="mt-3 text-xs leading-6 text-amber-200/70">This PR does not need to exist. GitHub identity and merge are simulated; submitting still requires a real Sepolia wallet transaction.</p></div>}
+                </div>
+                <div className="cc-field"><label htmlFor="reviewer-notes">Notes for reviewer <span className="text-neutral-600">(optional)</span></label><textarea id="reviewer-notes" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Describe your changes and how you tested them…" className="cc-input" /></div>
+                {!canSubmit && <p className="text-xs leading-6 text-neutral-400">{opportunity.state !== 'Open' ? `This opportunity is ${opportunity.state.toLowerCase()} and no longer accepts submissions.` : deadlinePassed ? 'The submission deadline has passed.' : 'Checking the submission deadline…'}</p>}
+                <button type="submit" disabled={isSubmitting || !prUrl || !canSubmit} className="cc-btn cc-btn-primary w-full">{isSubmitting ? <Clock size={16} className="animate-spin" /> : <Send size={16} />}<span>{isSubmitting ? 'Verifying PR…' : 'Submit to opportunity'}</span></button>
+              </form>}
+          </section>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+export default function OpportunityDetailsPage({ params }: { params: Promise<{ id: string }> }) {
+  return <Suspense fallback={<div className="cc-page"><p className="cc-empty" role="status">Loading opportunity details…</p></div>}><OpportunityContent params={params} /></Suspense>
+}

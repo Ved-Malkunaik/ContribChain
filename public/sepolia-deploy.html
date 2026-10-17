@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Deploy ContribChain to Sepolia</title>
+<style>body{font:16px system-ui;background:#080c16;color:#eee;max-width:740px;margin:48px auto;padding:24px}button{font:inherit;padding:14px 22px;background:#6366f1;color:white;border:0;border-radius:10px;cursor:pointer}button:disabled{opacity:.5;cursor:default}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#141b2c;padding:20px;border-radius:12px}a{color:#a5b4fc}small{color:#b4bdd3}#status{line-height:1.7}</style></head>
+<body><h1>Deploy ContribChain</h1><p>Ethereum Sepolia testnet · Value: 0 ETH · Your wallet pays testnet gas.</p>
+<p>Open this address in <strong>Chrome or Edge with MetaMask</strong>. Click below, select your funded account, and confirm the deployment in MetaMask.</p>
+<button id="deploy" disabled>Connect MetaMask & deploy</button>
+<p id="status" role="status">Loading the compiled contract…</p><pre id="result" hidden></pre><p><a id="explorer" target="_blank" rel="noopener noreferrer" hidden>View deployment on Sepolia Etherscan</a></p>
+<small id="build"></small>
+<script>
+'use strict';
+const button = document.getElementById('deploy');
+const status = document.getElementById('status');
+const result = document.getElementById('result');
+let artifact;
+let transactionHash = localStorage.getItem('contribchain.sepolia.deployment') || '';
+const providers = [];
+window.addEventListener('eip6963:announceProvider', event => { if(event.detail?.info?.rdns === 'io.metamask') providers.push(event.detail.provider); });
+window.dispatchEvent(new Event('eip6963:requestProvider'));
+function wallet() { return providers[0] || window.ethereum?.providers?.find(provider => provider.isMetaMask) || (window.ethereum?.isMetaMask ? window.ethereum : undefined); }
+function showHash(hash) { transactionHash=hash; localStorage.setItem('contribchain.sepolia.deployment',hash); result.hidden=false; result.textContent='Deployment transaction: '+hash+'\nSend this transaction hash to the chat so the app can be configured.'; const link=document.getElementById('explorer'); link.href='https://sepolia.etherscan.io/tx/'+hash; link.hidden=false; }
+async function confirm(provider) {
+  if ((await provider.request({method:'eth_chainId'})).toLowerCase() !== artifact.chainId) throw new Error('Switch MetaMask to Ethereum Sepolia to check this deployment.');
+  const receipt = await provider.request({method:'eth_getTransactionReceipt',params:[transactionHash]});
+  if (!receipt) { status.textContent='Transaction submitted. Waiting for Sepolia confirmation. Keep this page open; do not deploy again.'; setTimeout(()=>confirm(provider).catch(failure),5000); return; }
+  if (receipt.status !== '0x1' || !receipt.contractAddress) { localStorage.removeItem('contribchain.sepolia.deployment'); transactionHash=''; throw new Error('Deployment reverted. No contract was deployed.'); }
+  const code = await provider.request({method:'eth_getCode',params:[receipt.contractAddress,'latest']});
+  if (code.toLowerCase() !== artifact.deployedBytecode.toLowerCase()) throw new Error('Deployed code does not match this contract. Send the transaction hash to the chat for review.');
+  status.textContent='DEPLOYED — confirmed on Ethereum Sepolia. Send the transaction hash or contract address to the chat to finish app configuration.';
+  result.textContent='Contract: '+receipt.contractAddress+'\nTransaction: '+transactionHash+'\n\nNEXT_PUBLIC_BOUNTY_ADDRESS='+receipt.contractAddress+'\nNEXT_PUBLIC_BOUNTY_DEPLOYMENT_BLOCK='+BigInt(receipt.blockNumber).toString();
+  button.disabled=true;
+}
+function failure(error) { status.textContent=error?.message || String(error); button.disabled=!!transactionHash; }
+button.addEventListener('click',async()=>{
+  button.disabled=true;
+  try {
+    const provider=wallet();
+    if(!provider) throw new Error('Open this page in Chrome or Edge where MetaMask is installed. The in-app browser cannot access your extension.');
+    const accounts=await provider.request({method:'eth_requestAccounts'});
+    if(!accounts[0]) throw new Error('Select a MetaMask account.');
+    if((await provider.request({method:'eth_chainId'})).toLowerCase()!==artifact.chainId) await provider.request({method:'wallet_switchEthereumChain',params:[{chainId:artifact.chainId}]});
+    if((await provider.request({method:'eth_chainId'})).toLowerCase()!==artifact.chainId) throw new Error('Deployment is restricted to Ethereum Sepolia.');
+    if(transactionHash) { await confirm(provider); return; }
+    const tx={from:accounts[0],data:artifact.bytecode,value:'0x0'};
+    status.textContent='Estimating deployment gas…';
+    const gas=await provider.request({method:'eth_estimateGas',params:[tx]});
+    tx.gas='0x'+((BigInt(gas)*120n+99n)/100n).toString(16);
+    status.textContent='Confirm the contract creation in MetaMask. Value is 0; only Sepolia gas is charged.';
+    showHash(await provider.request({method:'eth_sendTransaction',params:[tx]}));
+    await confirm(provider);
+  } catch(error) { failure(error); }
+});
+fetch('/sepolia-deployment.json',{cache:'no-store'}).then(response=>{if(!response.ok)throw new Error('Compiled deployment artifact unavailable');return response.json();}).then(data=>{
+  artifact=data;
+  document.getElementById('build').textContent='Solidity '+data.compiler+' · optimizer 200 · Paris EVM · bytecode hash '+data.bytecodeHash;
+  status.textContent=wallet()?'Ready. Your MetaMask will confirm the deployment.':'Open http://localhost:3000/sepolia-deploy.html in Chrome or Edge with MetaMask.';
+  button.disabled=false;
+  if(transactionHash){ showHash(transactionHash);button.textContent='Check existing deployment'; }
+}).catch(failure);
+</script></body></html>

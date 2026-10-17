@@ -1,0 +1,9 @@
+{
+  "chainId": 11155111,
+  "contractAddress": "0x911c624b6e382d436a7fd2fe0f90cdb2af02cad2",
+  "deploymentBlock": "11934189",
+  "transactionHash": "0x70dafab1f45596647f24a4879cc4a8fca96acd0f1a7feeafccd3a6483ef38304",
+  "deployer": "0x5e8a34d126136380a909126f0542215860efef00",
+  "bytecodeHash": "0x82fa3b1a6f4d4a8078de1245ec1f36e2eacedbdc63edb62776336fc6d80bf09b",
+  "verifiedAt": "2026-10-17T12:37:53.807Z"
+}
