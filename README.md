@@ -18,7 +18,7 @@ Sepolia contribution bounties: funded escrow, verified GitHub authors, publisher
 
 ## Prerequisites and setup
 
-Use Node **24.x** (tested: 24.11.1, npm 11.6.2), MetaMask, two funded Sepolia test accounts, a public repository owned by the publisher's GitHub User, a separate contributor GitHub account, OAuth app credentials, a Sepolia RPC and an HTTPS webhook endpoint. Keep sibling `contracts` and `contribchain` directories together.
+Use Node **24.x** (tested: 24.11.1, npm 11.6.2), MetaMask, two funded Sepolia test accounts, a public repository owned by the publisher's GitHub User, a separate contributor GitHub account, GitHub sign-in credentials, a Sepolia RPC and an HTTPS webhook endpoint. Keep sibling `contracts` and `contribchain` directories together.
 
 ```powershell
 # Start in contribchain
@@ -53,9 +53,9 @@ npm run start
 `.env.example` describes each field:
 
 - `DATABASE_URL`: persistent SQLite file, relative to the Prisma schema or an absolute file URL. CLI and server must use the same database.
-- `APP_URL`: exact browser/public origin, including port. Choose a stable origin before publishing metadata: on-chain metadata URIs cannot be changed.
+- `APP_URL`: exact browser/public origin, including port. Set `NEXT_PUBLIC_APP_URL` to the same origin. Choose a stable origin before publishing metadata: on-chain metadata URIs cannot be changed.
 - `AUTH_SECRET`: generate locally using `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` and put the result in `.env`.
-- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`: server-only OAuth app credentials.
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`: server-only OAuth credentials from a GitHub OAuth App, or the OAuth Client ID and Client Secret from a GitHub App. For a GitHub App, do not use its numeric App ID or private key for these values.
 - `GITHUB_WEBHOOK_SECRET`: independently generated secret shared with the repository webhook.
 - `GITHUB_API_TOKEN`: optional server-only public-API token for higher rate limits; repository write permission is unnecessary.
 - `SEPOLIA_RPC_URL`: server RPC; may contain a secret. `NEXT_PUBLIC_SEPOLIA_RPC_URL` is browser-visible and must not contain private credentials.
@@ -67,8 +67,8 @@ Read **`../contracts/REMIX.md`** for Solidity **0.8.28**, optimizer **200**, **P
 
 ## GitHub OAuth and wallet ownership
 
-1. GitHub Settings → Developer settings → OAuth Apps: create a demo OAuth app. Homepage: `http://localhost:3000`. Callback: **`http://localhost:3000/api/auth/callback/github`**. Replace the origin everywhere for HTTPS/tunnel hosting.
-2. Set credentials and AUTH_SECRET in `.env`, restart, then use “Sign in with GitHub” from either dashboard. Auth.js manages state/PKCE, CSRF-protected auth actions and database sessions. Cookies are HttpOnly/SameSite and secure over HTTPS. Scope: `read:user`.
+1. Create a GitHub OAuth App or GitHub App. Set its homepage URL to `http://localhost:3000` and its callback URL to **`http://localhost:3000/api/auth/callback/github`**. For a GitHub App, use the OAuth Client ID and Client Secret from its settings; the numeric App ID and private key are not used for sign-in. Replace the origin in both URLs for HTTPS/tunnel hosting.
+2. Set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and a random `AUTH_SECRET` in the environment used by the running server. Restart the local server after editing `.env`; for hosted deployments, set these as server-side deployment environment variables and redeploy/restart. A local `.env` does not configure an already-running server on another machine or hosting provider. Then use “Sign in with GitHub” from either dashboard. Auth.js manages state/PKCE, CSRF-protected auth actions and database sessions. Cookies are HttpOnly/SameSite and secure over HTTPS. Scope: `read:user`.
 3. Connect MetaMask on Sepolia and choose “Prove wallet ownership.” The signature challenge binds wallet, session, domain, chain, random nonce and five-minute expiry. It is single-use. Session generations invalidate stale challenges when accounts change.
 4. Account changes/disconnect clear the session's wallet authority. Prove each new active wallet. Wallet connection alone and GitHub login alone cannot authorize writes. Stable GitHub IDs are stored; names are display fields. A wallet linked to another GitHub identity is refused.
 
