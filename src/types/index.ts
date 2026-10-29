@@ -16,6 +16,7 @@ export interface Project {
   liveDappUrl: string
   demoVideoUrl?: string
   publisherAddress: string
+  publisherUserId?: string
   createdAt: string
   opportunitiesCount?: number
   totalBountyEth?: string
@@ -37,6 +38,8 @@ export interface Opportunity {
   issueUrl?: string
   state: OpportunityState
   publisherAddress: string
+  publisherUserId?: string
+  txHash?: string
   selectedSubmissionId?: string
   remainingEscrowEth: string
   submissionsCount?: number
@@ -49,6 +52,7 @@ export interface Submission {
   opportunityId: string
   opportunity?: Opportunity
   contributorAddress: string
+  contributorUserId?: string
   githubUsername: string
   githubPrUrl: string
   prNumber: number

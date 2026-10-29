@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { getSubmissionPresentation } from '../src/lib/submission-presentation.ts'
+import { explorerUrl } from '../src/lib/contract.ts'
 import type { Opportunity, Submission } from '../src/types/index.ts'
 
 const submission: Submission = {
@@ -21,7 +22,7 @@ test('paid submissions expose receipt data and no review or payment action', () 
   const result = getSubmissionPresentation({ ...submission, status: 'Paid', payoutTxHash: '0xreceipt' }, opportunity)
   assert.equal(result.action, null)
   assert.equal(result.status, 'Paid')
-  assert.equal(result.receiptUrl, 'https://sepolia.etherscan.io/tx/0xreceipt')
+  assert.equal(result.receiptUrl, `${explorerUrl}/tx/0xreceipt`)
   assert.equal(result.rewardEth, '0.01')
   assert.equal(result.recipient, '0x1234')
 })
@@ -56,10 +57,10 @@ test('pending submissions cannot be reviewed after another winner is selected or
   }
 })
 
-test('unverified submissions require explicit demo mode before review', () => {
+test('unverified and simulated submissions cannot be reviewed', () => {
   assert.equal(getSubmissionPresentation({ ...submission, identityVerified: false }, opportunity).action, null)
   assert.equal(getSubmissionPresentation({ ...submission, identityVerified: false, demo: true }, opportunity).action, null)
-  assert.equal(getSubmissionPresentation({ ...submission, identityVerified: false, demo: true }, opportunity, true).action, 'review')
+  assert.equal(getSubmissionPresentation({ ...submission, identityVerified: true, demo: true }, opportunity).action, null)
 })
 
 test('rejected submissions and submissions missing an opportunity expose no actions', () => {
@@ -69,14 +70,14 @@ test('rejected submissions and submissions missing an opportunity expose no acti
 
 test('review stops exactly at the submission deadline and waits for the client clock', () => {
   const deadline = new Date(opportunity.deadline).getTime()
-  assert.equal(getSubmissionPresentation(submission, opportunity, false, deadline - 1).action, 'review')
+  assert.equal(getSubmissionPresentation(submission, opportunity, deadline - 1).action, 'review')
   for (const now of [0, deadline, deadline + 1]) {
-    assert.equal(getSubmissionPresentation(submission, opportunity, false, now).action, null)
+    assert.equal(getSubmissionPresentation(submission, opportunity, now).action, null)
   }
-  assert.equal(getSubmissionPresentation(submission, opportunity, false, deadline).status, 'Deadline passed')
+  assert.equal(getSubmissionPresentation(submission, opportunity, deadline).status, 'Deadline passed')
 })
 
 test('an already approved winner can still receive payment after the deadline', () => {
-  const result = getSubmissionPresentation({ ...submission, status: 'Approved' }, { ...opportunity, state: 'Approved', selectedSubmissionId: '7' }, false, new Date(opportunity.deadline).getTime() + 1)
+  const result = getSubmissionPresentation({ ...submission, status: 'Approved' }, { ...opportunity, state: 'Approved', selectedSubmissionId: '7' }, new Date(opportunity.deadline).getTime() + 1)
   assert.equal(result.action, 'payment')
 })

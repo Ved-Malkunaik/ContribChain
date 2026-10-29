@@ -1,20 +1,20 @@
 # ContribChain
 
-## Local hackathon demo
+## Local setup
 
-The current Sepolia deployment is recorded in `deployments/sepolia.json`. The local `.env` enables `DEMO_MODE=true` for the requested demo. **GitHub identity, PR existence and merging are simulated; wallet transactions, escrow balances and payments are real Sepolia.** The app displays this distinction on the opportunity and dashboard screens. Demo mode only operates with a localhost/127.0.0.1 application origin; disable it for a real GitHub demonstration.
+Every publisher and contributor action requires a real GitHub OAuth session and a wallet signature proving ownership of the connected BridgeKey address. The GitHub account ID and wallet link are stored on one persistent profile; wallet-only sessions and simulated GitHub identities cannot perform protected actions. Public project browsing remains available without signing in.
 
-1. Publisher connects the funded Sepolia wallet. The registered StellarPoll project is `/projects/1`; use **Add Opportunity** in Publisher Hub to create and fund a task.
-2. Contributor connects a second funded Sepolia wallet, opens the opportunity, chooses **Use example demo PR**, and confirms **Submit to Opportunity** in MetaMask.
-3. Publisher switches back to the original wallet, opens **Publisher Hub → PR Submissions**, and confirms **Approve Winner** in MetaMask.
-4. Under **Reward Releases**, click **Simulate PR merge (demo)**, then **Confirm and pay Sepolia ETH**. This is a real escrow payout to the displayed contributor wallet; the publisher pays gas.
-5. Wait for two confirmations. Contributor Hub displays the confirmed earned reward and Etherscan payment link. No payout occurs just because a PR was submitted.
+1. Configure GitHub OAuth and `AUTH_SECRET` in `.env`, then sign in with GitHub.
+2. Connect BridgeKey on MST Testnet and choose **Verify wallet ownership**. The wallet signs a short-lived challenge; ContribChain never requests a private key.
+3. A publisher registers a public GitHub repository owned by the signed-in GitHub account, then creates and funds an opportunity.
+4. A contributor signs in with their own GitHub account and wallet, submits a real pull request to the registered repository, and confirms the on-chain submission.
+5. After the publisher approves the contribution and GitHub confirms the merge, the publisher releases the escrow reward. Transaction hashes and MSTScan links appear in the transaction status and publisher history.
 
 Confirmed MetaMask smart-account transactions are supported through the DelegationManager execution envelope. Reloading the app automatically checks a stored pending transaction instead of requiring another payment.
 
 Sepolia contribution bounties: funded escrow, verified GitHub authors, publisher review, merge checks and publisher-confirmed payment. The existing dark layout/video hero are preserved. Live routes no longer use fixture bounties, fabricated statistics or timer-based transaction success.
 
-**Implemented and locally tested:** contract, wallet/contract frontend wiring, Prisma SQLite, GitHub OAuth routes, wallet ownership challenges, PR validation, signed webhooks, merge gate, canonical receipt ingestion and bounded event indexing. **Pending live verification:** Remix VM, MetaMask interaction, GitHub OAuth/real PRs, public webhook delivery and Sepolia deployment. No deployment address or credentials have been invented.
+**Implemented and locally tested:** contract, wallet/contract frontend wiring, Prisma SQLite, GitHub OAuth routes, wallet ownership challenges, PR validation, signed webhooks, merge gate, canonical receipt ingestion, bounded event indexing, and linked GitHub/wallet profile checks. **Pending live verification:** BridgeKey interaction, GitHub OAuth/real PRs, public webhook delivery, and live MST Testnet transactions.
 
 ## Prerequisites and setup
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useTransaction } from '@/lib/use-platform'
+import { api, useTransaction } from '@/lib/use-platform'
 import { IdentityPanel, FeedStatus, TransactionStatus } from '@/components/PlatformStatus'
 
 import { useAccount } from 'wagmi'
@@ -38,6 +38,11 @@ export default function NewProjectPage() {
   const [submitError, setSubmitError] = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   const registered=success || tx.confirmedFunction==='registerProject'
   useEffect(()=>{
     if(!registered) return
@@ -92,17 +97,7 @@ export default function NewProjectPage() {
       if (contractAddress) {
         await tx.send('projects/prepare', formData)
       } else {
-        // Contract not yet deployed to Sepolia testnet, register directly to persistent database
-        const res = await fetch('/api/projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...formData,
-            publisherAddress: address || '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-          }),
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Failed to save project to database')
+        await api('projects/prepare', formData, address)
       }
       setSuccess(true)
     } catch (err: unknown) {
@@ -118,7 +113,7 @@ export default function NewProjectPage() {
       <PageHeader eyebrow="Publisher / New project" title="Build something open." description="Give your project a home on ContribChain. Share what you’re building, then invite contributors to move it forward." />
       <IdentityPanel /><FeedStatus /><TransactionStatus tx={tx} />
 
-      {!isConnected && <div className="cc-panel mb-6 flex items-start gap-3 text-sm text-neutral-400"><AlertCircle size={18} className="shrink-0 text-amber-300" /><p><span className="font-medium text-white">Connect your wallet.</span> Use the navigation to connect MetaMask and anchor the project to your publisher address on Sepolia.</p></div>}
+      {mounted && !isConnected && <div className="cc-panel mb-6 flex items-start gap-3 text-sm text-neutral-400"><AlertCircle size={18} className="shrink-0 text-amber-300" /><p><span className="font-medium text-white">Connect your wallet.</span> Use the navigation to connect BridgeKey or your wallet and anchor the project to your publisher address on MST Testnet.</p></div>}
 
       {registered ? (
         <div className="cc-panel py-12 text-center space-y-4" role="status"><CheckCircle2 className="mx-auto text-emerald-300" size={40} /><h2 className="text-2xl font-semibold">Your project is registered.</h2><p className="text-sm text-neutral-400">Returning to your publisher hub. You’re ready to create your first funded opportunity.</p><Link href="/publisher" className="cc-btn cc-btn-primary">Go to publisher hub</Link></div>

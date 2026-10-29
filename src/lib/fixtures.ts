@@ -11,7 +11,7 @@ export const FIXTURE_PROJECTS: Project[] = [
     name: 'AetherVault DeFi',
     shortDescription: 'Decentralized multi-signature vault for automated liquidity yield farming.',
     detailedDescription:
-      'AetherVault is an open-source decentralized treasury and multi-sig vault protocol running on Ethereum Sepolia. It enables DAOs to programmatically distribute rewards and manage collective asset pools with time-locked execution.',
+      'AetherVault is an open-source decentralized treasury and multi-sig vault protocol running on MST Testnet. It enables DAOs to programmatically distribute rewards and manage collective asset pools with time-locked execution.',
     category: 'DeFi',
     technologies: ['Solidity', 'Next.js', 'Ethers.js', 'Tailwind CSS'],
     repoUrl: 'https://github.com/example-defi/aethervault-core',
@@ -91,7 +91,7 @@ export const FIXTURE_OPPORTUNITIES: Opportunity[] = [
     description:
       'Integrate the circom zero-knowledge verifier contract with a set of modular React hooks utilizing Wagmi v2 and Viem. Include demo component in the documentation.',
     acceptanceCriteria:
-      '- Typed hooks useProofVerify() and useCredentialStatus()\n- Supports Ethereum Sepolia chain\n- PR opened against zk-identity-verifier repository',
+      '- Typed hooks useProofVerify() and useCredentialStatus()\n- Supports MST Testnet chain\n- PR opened against zk-identity-verifier repository',
     difficulty: 'intermediate',
     requiredSkills: ['React', 'TypeScript', 'Wagmi'],
     rewardEth: '0.05',

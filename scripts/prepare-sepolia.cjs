@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- This helper is intentionally CommonJS (.cjs). */
 const fs = require('node:fs');
 const path = require('node:path');
 const { createRequire } = require('node:module');

@@ -1,14 +1,20 @@
 import { http, createConfig } from 'wagmi'
-import { sepolia } from 'wagmi/chains'
 import { injected } from 'wagmi/connectors'
+import { mstTestnet } from './contract'
 
 export const config = createConfig({
-  chains: [sepolia],
-  connectors: [injected({target:'metaMask'})],
+  chains: [mstTestnet],
+  connectors: [
+    injected({
+      shimDisconnect: true,
+    }),
+  ],
   multiInjectedProviderDiscovery: true,
   transports: {
-    [sepolia.id]: http(
-      process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com'
+    [mstTestnet.id]: http(
+      process.env.NEXT_PUBLIC_MST_RPC_URL ||
+      process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL ||
+      'https://testnetrpc.mstblockchain.com'
     ),
   },
   ssr: true,

@@ -5,7 +5,7 @@ import { db } from './db'
 import { contractAddress } from '../contract'
 import { parseRepo } from '../security'
 const repoSchema = z.object({ id: z.number().int(), full_name: z.string(), private: z.boolean(), owner: z.object({id: z.number().int(), type: z.string()}), html_url: z.string().url() })
-const pullSchema = z.object({ number: z.number().int(), title: z.string(), html_url: z.string().url(), state: z.enum(['open','closed']), merged: z.boolean(), user: z.object({id: z.number().int(), login: z.string()}), base: z.object({repo: repoSchema}), head: z.object({sha: z.string()}) })
+const pullSchema = z.object({ number: z.number().int(), title: z.string(), html_url: z.string().url(), state: z.enum(['open','closed']), merged: z.boolean(), merged_at: z.string().nullish(), user: z.object({id: z.number().int(), login: z.string()}), base: z.object({repo: repoSchema}), head: z.object({sha: z.string()}) })
 let rateLimitUntil = 0
 export async function github(path: string, token?: string | null) {
   if (Date.now() < rateLimitUntil) throw new Error('GitHub rate limit backoff; retry later')
@@ -61,7 +61,11 @@ export async function syncPull(id: string, force = false, token?: string | null)
     try {
       const pr = await pull(s.repoId, s.prNumber, token || process.env.GITHUB_API_TOKEN)
       if (String(pr.base.repo.id) !== s.repoId || String(pr.user.id) !== s.githubId || pr.base.repo.private) throw new Error('PR repository or author no longer matches the verified identity')
-      await db.verifiedSubmission.update({where:{id}, data:{ title: pr.title, login: pr.user.login, prState: pr.merged ? 'merged' : pr.state, commit: pr.head.sha, syncedAt: new Date(), nextSyncAt: new Date(Date.now()+15000), syncError: null }})
+      const mergedAt = pr.merged_at ? new Date(pr.merged_at) : null
+      await db.$transaction([
+        db.verifiedSubmission.update({where:{id}, data:{ title: pr.title, login: pr.user.login, prState: pr.merged ? 'merged' : pr.state, commit: pr.head.sha, syncedAt: new Date(), nextSyncAt: new Date(Date.now()+15000), syncError: null }}),
+        db.submission.updateMany({where:{id}, data:{isMerged:pr.merged, mergedAt, latestCommitSha:pr.head.sha}}),
+      ])
     } catch(error) {
       await db.verifiedSubmission.update({where:{id}, data:{syncError: error instanceof Error ? error.message : 'Synchronization failed', nextSyncAt: new Date(Math.max(Date.now()+60000, rateLimitUntil))}})
       throw error

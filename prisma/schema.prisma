@@ -21,8 +21,9 @@ model User {
   nonceExpiresAt DateTime?
   accounts       Account[]
   sessions       Session[]
-  projects       Project[]
-  submissions    Submission[]
+  ownedProjects  Project[]     @relation("ProjectPublisher")
+  opportunities  Opportunity[] @relation("OpportunityPublisher")
+  contributions  Submission[]  @relation("SubmissionContributor")
 }
 
 model Account {
@@ -84,14 +85,14 @@ model Challenge {
 
 model Snapshot {
   id              String   @id @default(cuid())
-  kind            String   // "project" | "opportunity"
-  owner           String   // publisher address (lowercase)
-  canonical       String   // canonical JSON string
+  kind            String // "project" | "opportunity"
+  owner           String // publisher address (lowercase)
+  canonical       String // canonical JSON string
   hash            String   @unique
   uri             String
   repoId          String?
   parentId        String?
-  chainRef        String?  // on-chain ID string
+  chainRef        String? // on-chain ID string
   transactionHash String?
   published       Boolean  @default(false)
   chainAddress    String   @default("")
@@ -112,7 +113,7 @@ model VerifiedSubmission {
   title           String
   login           String
   notes           String
-  prState         String   // "open" | "closed" | "merged"
+  prState         String // "open" | "closed" | "merged"
   commit          String
   syncedAt        DateTime
   nextSyncAt      DateTime
@@ -122,19 +123,20 @@ model VerifiedSubmission {
   chainAddress    String   @default("")
   createdAt       DateTime @default(now())
 
+  @@unique([chainAddress, repoId, prNumber])
   @@index([repoId, prNumber])
   @@index([opportunityId, wallet])
 }
 
 model ChainEvent {
-  id              String   @id @default(cuid())
+  id              String @id @default(cuid())
   chainId         Int
   transactionHash String
   logIndex        Int
   blockNumber     String
   eventName       String
   payload         String
-  contractAddress String   @default("")
+  contractAddress String @default("")
 
   @@unique([chainId, transactionHash, logIndex])
 }
@@ -160,62 +162,73 @@ model WebhookDelivery {
 }
 
 model Project {
-  id                  String        @id @default(cuid())
-  onChainId           Int?          @unique
+  id                  String   @id @default(cuid())
+  publisherUserId     String?
+  publisher           User?    @relation("ProjectPublisher", fields: [publisherUserId], references: [id], onDelete: SetNull)
+  onChainId           Int?     @unique
   publisherAddress    String
-  publisherUser       User?         @relation(fields: [publisherAddress], references: [walletAddress])
   name                String
   shortDescription    String
   detailedDescription String
   category            String
-  technologies        String        // JSON array string
-  repoId              String        // Canonical "owner/repo"
+  technologies        String // JSON array string
+  repoId              String // Stable numeric GitHub repository ID
   repoUrl             String
   liveDappUrl         String
   demoVideoUrl        String?
   metadataURI         String?
   metadataHash        String?
   txHash              String?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  opportunities       Opportunity[]
+  opportunities Opportunity[]
+
+  @@index([publisherAddress])
+  @@index([publisherUserId])
 }
 
 model Opportunity {
-  id                   String       @id @default(cuid())
-  onChainId            Int?         @unique
+  id                   String   @id @default(cuid())
+  publisherUserId      String?
+  publisher            User?    @relation("OpportunityPublisher", fields: [publisherUserId], references: [id], onDelete: SetNull)
+  onChainId            Int?     @unique
   projectId            String
-  project              Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   publisherAddress     String
   title                String
-  taskType             String       // bug | feature | documentation | optimization | security
+  taskType             String // bug | feature | documentation | optimization | security
   description          String
   acceptanceCriteria   String
-  difficulty           String       // Beginner | Intermediate | Advanced
-  requiredSkills       String       // JSON array string
-  rewardEth            String       // Display string (e.g. "0.5")
-  rewardWei            String       // Exact integer wei string (e.g. "500000000000000000")
+  difficulty           String // Beginner | Intermediate | Advanced
+  requiredSkills       String // JSON array string
+  rewardEth            String // Display string (e.g. "0.5")
+  rewardWei            String // Exact integer wei string (e.g. "500000000000000000")
   deadline             DateTime
   issueUrl             String?
   metadataURI          String?
   metadataHash         String?
-  state                String       @default("OPEN") // OPEN | APPROVED | PAID | REFUNDED
+  state                String   @default("OPEN") // OPEN | APPROVED | PAID | REFUNDED
   selectedSubmissionId String?
   txHash               String?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  submissions          Submission[]
+  submissions Submission[]
+
+  @@index([projectId, state])
+  @@index([publisherAddress])
+  @@index([publisherUserId])
 }
 
 model Submission {
-  id                 String       @id @default(cuid())
-  onChainId          Int?         @unique
+  id                 String      @id @default(cuid())
+  contributorUserId  String?
+  contributor        User?       @relation("SubmissionContributor", fields: [contributorUserId], references: [id], onDelete: SetNull)
+  onChainId          Int?        @unique
   opportunityId      String
-  opportunity        Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  opportunity        Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   contributorAddress String
-  contributorUser    User?        @relation(fields: [contributorAddress], references: [walletAddress])
   githubUsername     String?
   githubUserId       String?
   prUrl              String
@@ -223,13 +236,19 @@ model Submission {
   repoOwner          String
   repoName           String
   notes              String?
-  status             String       @default("PENDING") // PENDING | APPROVED | REJECTED | PAID
-  isMerged           Boolean      @default(false)
+  status             String      @default("PENDING") // PENDING | APPROVED | REJECTED | PAID
+  isMerged           Boolean     @default(false)
   mergedAt           DateTime?
   latestCommitSha    String?
-  isRewardReady      Boolean      @default(false)
+  isRewardReady      Boolean     @default(false)
   txHash             String?
   paidTxHash         String?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@unique([repoOwner, repoName, prNumber])
+  @@unique([opportunityId, contributorAddress])
+  @@index([opportunityId, status])
+  @@index([contributorAddress])
+  @@index([contributorUserId])
 }

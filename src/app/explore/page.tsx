@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { formatEther, parseEther } from 'viem'
+import { currencySymbol } from '@/lib/contract'
 import { Search, FolderGit2, ArrowRight, ArrowUpRight } from 'lucide-react'
 import { useFeed } from '@/lib/use-platform'
 import { FeedStatus } from '@/components/PlatformStatus'
@@ -28,8 +29,8 @@ export default function ExplorePage() {
   return (
     <div className="cc-page">
       <FeedStatus />
-      <PageHeader eyebrow="THE OPEN SOURCE OPPORTUNITY BOARD · SEPOLIA" title="Find your next contribution."
-        description="Discover open-source dApps, find work that fits your skills, and earn from funded opportunities."
+      <PageHeader eyebrow="THE OPEN SOURCE OPPORTUNITY BOARD · MST TESTNET" title="Find your next contribution."
+        description="Discover open-source dApps on MST Blockchain, find work that fits your skills, and earn from funded opportunities."
         action={<Link href="/publisher/projects/new" className="cc-btn cc-btn-primary">List your dApp <ArrowUpRight size={16} /></Link>} />
       <section className="cc-panel mb-10" aria-label="Filter projects">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
@@ -53,10 +54,10 @@ export default function ExplorePage() {
       </section>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <h2 className="text-xl font-semibold tracking-tight text-white">Explore projects <span className="ml-2 text-sm font-normal text-neutral-500">{filteredProjects.length}</span></h2>
-        <p className="text-xs text-neutral-500">Escrow balances reflect confirmed Sepolia activity.</p>
+        <p className="text-xs text-neutral-500">Escrow balances reflect confirmed MST Testnet activity.</p>
       </div>
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        {isLoading && <div className="cc-empty col-span-full" role="status"><p>Loading projects from Sepolia…</p></div>}
+        {isLoading && <div className="cc-empty col-span-full" role="status"><p>Loading projects from MST Testnet…</p></div>}
         {filteredProjects.map((project) => {
           const projectOpps = data.opportunities.filter((o) => o.projectId === project.id)
           const totalBounty = formatEther(projectOpps.reduce((sum, o) => sum + parseEther(o.remainingEscrowEth), 0n))
@@ -67,7 +68,7 @@ export default function ExplorePage() {
             <div className="mb-8 flex flex-wrap gap-2">{project.technologies.map((tech) => <span key={tech} className="cc-badge !font-mono">{tech}</span>)}</div>
             <div className="mt-auto border-t border-white/10 pt-6">
               <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-                <div><p className="mb-1 text-xs text-neutral-500">Available escrow</p><p className="text-2xl font-medium tracking-tight text-white">{totalBounty} <span className="text-sm text-neutral-500">ETH</span></p></div>
+                <div><p className="mb-1 text-xs text-neutral-500">Available escrow</p><p className="text-2xl font-medium tracking-tight text-white">{totalBounty} <span className="text-sm text-neutral-500">{currencySymbol}</span></p></div>
                 <span className="inline-flex items-center gap-2 text-xs text-neutral-400"><FolderGit2 size={15} />{projectOpps.length} {projectOpps.length===1?'opportunity':'opportunities'}</span>
               </div>
               <Link href={`/projects/${project.id}`} className="cc-btn cc-btn-secondary w-full !justify-between">Explore project <ArrowRight size={16} /></Link>

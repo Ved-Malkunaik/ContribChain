@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useState, Suspense } from 'react'
+import { use, useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useAccount } from 'wagmi'
 import { Calendar, ChevronRight, GitPullRequest, CheckCircle2, Clock, ExternalLink, ShieldCheck, Send, Lock, ArrowLeft } from 'lucide-react'
@@ -9,19 +9,25 @@ import { EscrowReadout } from '@/components/EscrowReadout'
 import { useFeed, useTransaction, useNow } from '@/lib/use-platform'
 import { IdentityPanel, FeedStatus, TransactionStatus } from '@/components/PlatformStatus'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/ui/AppUI'
+import { explorerUrl, currencySymbol } from '@/lib/contract'
 
 function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
   const { data, isLoading } = useFeed()
   const tx = useTransaction()
   const now = useNow()
   const oppId = use(params).id
-  const { isConnected } = useAccount()
+  const { isConnected, address } = useAccount()
   const opportunity = data.opportunities.find((o) => o.id === oppId)
   const project = opportunity ? data.projects.find((p) => p.id === opportunity.projectId) : null
   const submissions = data.submissions.filter((s) => s.opportunityId === oppId)
   const [prUrl, setPrUrl] = useState('')
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   if (isLoading) return <div className="cc-page"><p className="cc-empty" role="status">Loading opportunity…</p></div>
   if (!opportunity || !project) return <div className="cc-page"><FeedStatus /><EmptyState title="Opportunity not found" description="The requested bounty opportunity does not exist." action={<Link href="/explore" className="cc-btn cc-btn-primary">Return to explore</Link>} /></div>
@@ -47,7 +53,7 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
         <span className="text-neutral-300">Opportunity {opportunity.onChainId ? `#${opportunity.onChainId}` : 'awaiting sync'}</span>
       </nav>
       <PageHeader eyebrow={`${project.name} · ${opportunity.taskType}`} title={opportunity.title}
-        description="Make a contribution. Meet the criteria. Build a reputation that stays on-chain."
+        description="Make a contribution. Meet the criteria. Build a reputation that stays on MST Blockchain."
         action={<Link href={`/projects/${project.id}`} className="cc-btn cc-btn-secondary"><ArrowLeft size={15} />View project</Link>} />
       <div className="mb-8 flex flex-wrap items-center gap-3 border-b border-white/10 pb-7 text-xs text-neutral-400">
         <StatusBadge status={opportunity.state} /><span className="cc-badge">{opportunity.difficulty}</span>
@@ -87,29 +93,46 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
         <aside className="min-w-0 space-y-6">
           <section className="cc-panel">
             <p className="cc-eyebrow mb-5">THE REWARD</p>
-            <div className="mb-2 flex flex-wrap items-baseline gap-2"><span className="break-all text-5xl font-medium tracking-tight text-white">{opportunity.rewardEth}</span><span className="text-sm text-neutral-500">Sepolia ETH</span></div>
-            <p className="mb-6 text-xs text-neutral-500">Bounty for the selected contribution</p>
+            <div className="mb-2 flex flex-wrap items-baseline gap-2"><span className="break-all text-5xl font-medium tracking-tight text-white">{opportunity.rewardEth}</span><span className="text-sm text-neutral-500">{currencySymbol}</span></div>
+            <p className="mb-4 text-xs text-neutral-500">Locked in smart contract escrow on MST Testnet</p>
+            <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs mb-5">
+              <div className="flex justify-between text-neutral-400"><span>Gross Bounty:</span><span className="font-mono text-neutral-200">{opportunity.rewardEth} {currencySymbol}</span></div>
+              <div className="flex justify-between text-neutral-400"><span>Platform Fee (3%):</span><span className="font-mono text-indigo-300">{(parseFloat(opportunity.rewardEth || '0') * 0.03).toFixed(4)} {currencySymbol}</span></div>
+              <div className="flex justify-between font-medium text-white border-t border-white/10 pt-2"><span>Net Contributor Payout:</span><span className="font-mono text-emerald-300">{(parseFloat(opportunity.rewardEth || '0') * 0.97).toFixed(4)} {currencySymbol}</span></div>
+            </div>
             <div className="space-y-4 border-y border-white/10 py-5 text-xs">
-              <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-neutral-500">Remaining escrow</span><span className="inline-flex items-center gap-2 text-neutral-200"><ShieldCheck size={14} />{opportunity.remainingEscrowEth} ETH</span></div>
+              <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-neutral-500">Remaining escrow</span><span className="inline-flex items-center gap-2 text-neutral-200"><ShieldCheck size={14} />{opportunity.remainingEscrowEth} {currencySymbol}</span></div>
               <div className="flex flex-wrap justify-between gap-2"><span className="text-neutral-500">Refund policy</span><span className="text-neutral-300">Expired only</span></div>
               <div className="break-words leading-6"><EscrowReadout onChainId={opportunity.onChainId} /></div>
             </div>
-            <p className="mt-5 text-xs leading-7 text-neutral-400">{data.demoMode ? 'After publisher approval and the simulated demo merge, the publisher confirms a real Sepolia transfer of the full bounty to the selected contributor wallet.' : 'Once approved and merged on GitHub, the publisher executes on-chain release to transfer the full bounty directly to the winner.'}</p>
+            <p className="mt-5 text-xs leading-7 text-neutral-400">{data.demoMode ? `After publisher approval and the simulated demo merge, publisher confirms the MST Testnet escrow release: 97% goes to the contributor and 3% to platform maintenance.` : `Once approved and merged on GitHub, the publisher executes on-chain release: 97% goes directly to the winner and 3% platform fee is deducted on payout.`}</p>
           </section>
           <section className="cc-panel">
             <p className="cc-eyebrow mb-4">{closed ? 'OPPORTUNITY OUTCOME' : 'YOUR NEXT MOVE'}</p><h2 className="text-xl font-semibold tracking-tight text-white">{opportunity.state === 'Paid' ? 'Reward completed.' : closed ? 'Submissions closed.' : 'Submit a contribution'}</h2>
             {closed ? <div role="status" className="mt-5 space-y-4 rounded-2xl border border-white/10 bg-black/30 p-6">
               <StatusBadge status={opportunity.state === 'Open' ? 'Deadline passed' : opportunity.state} />
-              <p className="text-xs leading-7 text-neutral-400">{opportunity.state === 'Paid' ? `${opportunity.rewardEth} Sepolia ETH was paid to the selected contributor. This opportunity is complete.` : opportunity.state === 'Approved' ? 'The publisher has selected a winner. Payment remains in escrow until the publisher confirms the payout.' : opportunity.state === 'Refunded' ? 'The expired escrow was returned to the publisher.' : 'The deadline has passed. New submissions and winner approvals are closed.'}</p>
-              {opportunity.state === 'Paid' && paidWinner && <><p className="break-all font-mono text-[11px] leading-6 text-neutral-400">Recipient: {paidWinner.contributorAddress}</p>{paidWinner.payoutTxHash && <a href={`https://sepolia.etherscan.io/tx/${paidWinner.payoutTxHash}`} target="_blank" rel="noreferrer" className="cc-btn cc-btn-secondary">View payment receipt <ExternalLink size={13} /></a>}</>}
+              <p className="text-xs leading-7 text-neutral-400">{opportunity.state === 'Paid' ? `${opportunity.rewardEth} ${currencySymbol} was paid to the selected contributor (97% net after 3% platform fee). This opportunity is complete.` : opportunity.state === 'Approved' ? 'The publisher has selected a winner. Payment remains in escrow until the publisher confirms the payout.' : opportunity.state === 'Refunded' ? 'The expired escrow was returned to the publisher.' : 'The deadline has passed. New submissions and winner approvals are closed.'}</p>
+              {opportunity.state === 'Paid' && paidWinner && <><p className="break-all font-mono text-[11px] leading-6 text-neutral-400">Recipient: {paidWinner.contributorAddress}</p>{paidWinner.payoutTxHash && <a href={`${explorerUrl}/tx/${paidWinner.payoutTxHash}`} target="_blank" rel="noreferrer" className="cc-btn cc-btn-secondary">View payment receipt on MSTScan <ExternalLink size={13} /></a>}</>}
               <Link href="/explore" className="cc-link inline-flex items-center gap-2 text-xs">Find another opportunity <ChevronRight size={13} /></Link>
-            </div> : tx.confirmedFor('submitContribution', oppId) ? <div role="status" className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6"><CheckCircle2 size={24} className="mb-4 text-emerald-300" /><h3 className="mb-2 text-sm font-semibold text-white">Submission recorded</h3><p className="text-xs leading-7 text-neutral-400">Your pull request was submitted and queued for publisher review.</p></div>
-              : !isConnected ? <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-6"><Lock size={22} className="mb-4 text-neutral-400" /><h3 className="mb-2 text-sm font-semibold text-white">Connect your wallet to contribute</h3><p className="text-xs leading-7 text-neutral-400">{data.demoMode ? 'Connect MetaMask via the top navigation to submit a demo contribution. The on-chain submission and any payout use this wallet.' : 'Connect MetaMask via the top navigation to verify identity and submit your PR to escrow.'}</p></div>
+            </div> : tx.confirmedFor('submitContribution', oppId) ? <div role="status" className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6"><CheckCircle2 size={24} className="mb-4 text-emerald-300" /><h3 className="mb-2 text-sm font-semibold text-white">Submission recorded</h3><p className="text-xs leading-7 text-neutral-400">Your pull request was submitted and queued for publisher review on MST Testnet.</p></div>
+              : (!mounted || !isConnected) ? <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-6"><Lock size={22} className="mb-4 text-neutral-400" /><h3 className="mb-2 text-sm font-semibold text-white">Connect your wallet to contribute</h3><p className="text-xs leading-7 text-neutral-400">{data.demoMode ? `Connect BridgeKey or wallet via the top navigation to submit a demo contribution. The on-chain submission and any payout in ${currencySymbol} use this wallet.` : `Connect BridgeKey or wallet via the top navigation to verify identity and submit your PR to escrow on MST Testnet.`}</p></div>
+              : (mounted && !!address && address.toLowerCase() === opportunity.publisherAddress.toLowerCase()) ? (
+                <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-6">
+                  <ShieldCheck size={22} className="mb-4 text-emerald-400" />
+                  <h3 className="mb-2 text-sm font-semibold text-white">You are the Publisher of this project</h3>
+                  <p className="text-xs leading-7 text-neutral-400">
+                    Publishers review incoming pull requests and release payouts. Only independent contributors can submit contributions to claim bounties.
+                  </p>
+                  <Link href="/publisher" className="cc-btn cc-btn-secondary mt-4 w-full">
+                    Go to Publisher Hub
+                  </Link>
+                </div>
+              )
               : <form onSubmit={handleSubmit} className="space-y-5">
                 <p className="mt-3 text-xs leading-7 text-neutral-400">Submit and obtain publisher approval before the deadline. Approval fixes the winner; payment requires a separate publisher transaction.</p>
                 <div className="cc-field"><label htmlFor="pull-request-url">{data.demoMode ? 'Demo pull request URL *' : 'GitHub pull request URL *'}</label>
                   <input id="pull-request-url" type="url" required value={prUrl} onChange={(e) => setPrUrl(e.target.value)} placeholder="https://github.com/owner/repo/pull/123" className="cc-input" />
-                  {data.demoMode && <div className="mt-3 rounded-xl border border-amber-300/15 bg-amber-300/5 p-4"><button type="button" className="text-xs text-amber-200 underline underline-offset-4" onClick={() => setPrUrl(project.repoUrl.replace(/\/$/, '') + '/pull/1')}>Use example demo PR</button><p className="mt-3 text-xs leading-6 text-amber-200/70">This PR does not need to exist. GitHub identity and merge are simulated; submitting still requires a real Sepolia wallet transaction.</p></div>}
+                  {data.demoMode && <div className="mt-3 rounded-xl border border-amber-300/15 bg-amber-300/5 p-4"><button type="button" className="text-xs text-amber-200 underline underline-offset-4" onClick={() => setPrUrl(project.repoUrl.replace(/\/$/, '') + '/pull/1')}>Use example demo PR</button><p className="mt-3 text-xs leading-6 text-amber-200/70">This PR does not need to exist. GitHub identity and merge are simulated; submitting still records a real MST Testnet wallet transaction.</p></div>}
                 </div>
                 <div className="cc-field"><label htmlFor="reviewer-notes">Notes for reviewer <span className="text-neutral-600">(optional)</span></label><textarea id="reviewer-notes" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Describe your changes and how you tested them…" className="cc-input" /></div>
                 {!canSubmit && <p className="text-xs leading-6 text-neutral-400">{opportunity.state !== 'Open' ? `This opportunity is ${opportunity.state.toLowerCase()} and no longer accepts submissions.` : deadlinePassed ? 'The submission deadline has passed.' : 'Checking the submission deadline…'}</p>}
