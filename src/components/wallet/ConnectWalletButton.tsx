@@ -244,17 +244,15 @@ export function ConnectWalletButton() {
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
           className="flex items-center gap-2.5 px-3.5 py-1.5 bg-[#1c1c1f] border border-white/10 hover:border-white/20 text-white rounded-2xl text-xs sm:text-sm font-medium transition-colors cursor-pointer"
         >
-          <div className={`w-2 h-2 rounded-full ${identity.linked ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+          <div className="w-2 h-2 rounded-full bg-emerald-400" />
           <div className="flex flex-col text-left leading-tight">
             <span className="font-mono text-white text-xs">{address ? formatAddress(address) : ''}</span>
-            {identity.linked && (identity.session?.githubUsername || identity.session?.name) ? (
+            {identity.session?.githubUsername && !identity.session.githubId?.startsWith('wallet:') ? (
               <span className="text-[11px] text-neutral-400 font-sans">
-                @{identity.session.githubUsername || identity.session.name}
+                @{identity.session.githubUsername}
               </span>
-            ) : !identity.session?.authenticated ? (
-              <span className="text-[10px] text-amber-400/90 font-sans">GitHub unlinked</span>
             ) : (
-              <span className="text-[10px] text-amber-400/90 font-sans">Verify signature</span>
+              <span className="text-[10px] text-emerald-400/80 font-sans">BridgeKey Active</span>
             )}
           </div>
           <ChevronDown className="w-3.5 h-3.5 text-neutral-400 ml-0.5" />
@@ -277,13 +275,13 @@ export function ConnectWalletButton() {
                 <div>
                   <div className="text-xs font-semibold text-white">BridgeKey Wallet</div>
                   <div className="text-[11px] font-mono text-neutral-300">{address ? formatAddress(address) : ''}</div>
-                  {identity.session?.githubUsername || identity.session?.name ? (
+                  {identity.session?.githubUsername && !identity.session.githubId?.startsWith('wallet:') ? (
                     <div className="text-[11px] text-neutral-400 flex items-center gap-0.5 mt-0.5 font-sans">
                       <span className="text-indigo-400">@</span>
-                      <span>{identity.session.githubUsername || identity.session.name}</span>
+                      <span>{identity.session.githubUsername}</span>
                     </div>
                   ) : (
-                    <div className="text-[10.5px] text-amber-400 mt-0.5">GitHub unlinked</div>
+                    <div className="text-[10.5px] text-emerald-400 mt-0.5">Wallet ready</div>
                   )}
                 </div>
               </div>
@@ -296,51 +294,32 @@ export function ConnectWalletButton() {
               </button>
             </div>
 
-            {!identity.session?.authenticated ? (
+            {!identity.session?.authenticated || identity.session.githubId?.startsWith('wallet:') ? (
               <div className="py-3 border-b border-white/10 space-y-2">
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-neutral-400">GitHub Identity:</span>
-                  <span className="text-amber-400">Not Connected</span>
+                  <span className="text-neutral-400">BridgeKey Wallet:</span>
+                  <span className="text-emerald-400 font-medium">Ready for actions ✓</span>
                 </div>
                 <form action="/api/auth/signin" method="get">
                   <button
                     type="submit"
-                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 font-medium text-xs transition-colors cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 hover:text-white font-medium text-xs transition-colors cursor-pointer"
                   >
-                    Connect GitHub Account &rarr;
+                    <span>Link GitHub (Optional) &rarr;</span>
                   </button>
                 </form>
-              </div>
-            ) : !identity.linked ? (
-              <div className="py-3 border-b border-white/10 space-y-2">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-neutral-400">GitHub:</span>
-                  <span className="text-emerald-400">@{identity.session?.githubUsername || identity.session?.name} ✓</span>
-                </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-neutral-400">Wallet Signature:</span>
-                  <span className="text-amber-400">Action Required</span>
-                </div>
-                <button
-                  type="button"
-                  disabled={identity.busy}
-                  onClick={() => void identity.link()}
-                  className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 font-medium text-xs transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {identity.busy ? 'Signing challenge in BridgeKey…' : 'Verify Wallet Ownership &rarr;'}
-                </button>
               </div>
             ) : (
               <div className="py-3 border-b border-white/10 space-y-1.5 text-[11px]">
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">Dual-Auth Status:</span>
+                  <span className="text-neutral-400">Identity Status:</span>
                   <span className="text-emerald-400 font-semibold flex items-center gap-1">
                     <Check className="w-3.5 h-3.5" /> Verified
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-neutral-400">
                   <span>Linked GitHub:</span>
-                  <span className="text-white font-mono">@{identity.session?.githubUsername || identity.session?.name}</span>
+                  <span className="text-white font-mono">@{identity.session?.githubUsername}</span>
                 </div>
               </div>
             )}

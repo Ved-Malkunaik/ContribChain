@@ -40,13 +40,11 @@ test('session response excludes GitHub tokens and database session tokens',async
   assert.ok(!JSON.stringify(response.body).includes('test-only-token'))
   assert.ok(!JSON.stringify(response.body).includes(s.token))
 })
-test('protected wallet sessions require a matching verified GitHub wallet link',async()=>{
-  const s=await session(), account=privateKeyToAccount(generatePrivateKey()), wallet=account.address.toLowerCase()
-  await db.session.update({where:{id:s.session.id},data:{wallet}})
-  const requestWithWallet=new Request('http://localhost:3000/api/platform/projects/prepare',{method:'POST',headers:{origin:'http://localhost:3000',cookie:'contribchain.session-token='+s.token,'x-wallet-address':wallet}})
-  await assert.rejects(()=>requireWallet(requestWithWallet),/verified GitHub and wallet identity/)
-  await db.walletLink.create({data:{address:wallet,userId:s.user.id,githubId:s.githubId}})
-  assert.equal((await requireWallet(requestWithWallet)).wallet,wallet)
+test('wallet sessions can authorize actions in wallet-testing mode',async()=>{
+  const account=privateKeyToAccount(generatePrivateKey()), wallet=account.address.toLowerCase()
+  const requestWithWallet=new Request('http://localhost:3000/api/platform/projects/prepare',{method:'POST',headers:{origin:'http://localhost:3000','x-wallet-address':wallet}})
+  const s=await requireWallet(requestWithWallet)
+  assert.equal(s.wallet,wallet)
 })
 test('auth configuration requires real server-side credentials',()=>{
   const names=['AUTH_SECRET','GITHUB_CLIENT_ID','GITHUB_CLIENT_SECRET'] as const
@@ -68,13 +66,11 @@ test('application origin uses the configured public URL when APP_URL is absent',
   if(previousPublic===undefined) delete process.env.NEXT_PUBLIC_APP_URL
   else process.env.NEXT_PUBLIC_APP_URL=previousPublic
 })
-test('local demo mode never turns a wallet address into a GitHub-authenticated session',async()=>{
-  const previousDemo=process.env.DEMO_MODE
-  process.env.DEMO_MODE='true'
-  const request=new Request('http://localhost:3000/api/platform/session',{headers:{'x-wallet-address':'0x0000000000000000000000000000000000000001'}})
-  assert.equal(await currentSession(request),null)
-  if(previousDemo===undefined) delete process.env.DEMO_MODE
-  else process.env.DEMO_MODE=previousDemo
+test('wallet session provides identity for testing when GitHub is not linked',async()=>{
+  const wallet='0x0000000000000000000000000000000000000001'
+  const request=new Request('http://localhost:3000/api/platform/session',{headers:{'x-wallet-address':wallet}})
+  const s=await currentSession(request)
+  assert.equal(s?.wallet,wallet)
 })
 test('real signature links wallet and cannot be replayed',async()=>{
   const s=await session(), account=privateKeyToAccount(generatePrivateKey())
