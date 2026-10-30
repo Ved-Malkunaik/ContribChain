@@ -45,6 +45,8 @@ export interface Opportunity {
   remainingEscrowEth: string
   submissionsCount?: number
   createdAt: string
+  metadataHash?: string
+  metadataURI?: string
 }
 
 export interface Submission {

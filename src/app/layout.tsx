@@ -9,6 +9,11 @@ export const metadata: Metadata = {
   title: 'ContribChain — Contribute Code, Earn tMSTC on MST Blockchain',
   description:
     'Contribute to public GitHub projects and receive funded bounties on MST Blockchain testnet after publisher approval, merge, and payment confirmation.',
+  icons: {
+    icon: '/assets/contribChainlogo.webp',
+    shortcut: '/assets/contribChainlogo.webp',
+    apple: '/assets/contribChainlogo.webp',
+  },
 }
 
 export default function RootLayout({

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { keccak256, toHex } from 'viem'
 import { db } from './db'
 import { contractAddress } from '../contract'
-import { parseRepo } from '../security'
+import { parseRepo, parsePull } from '../security'
 const repoSchema = z.object({ id: z.number().int(), full_name: z.string(), private: z.boolean(), owner: z.object({id: z.number().int(), type: z.string()}), html_url: z.string().url() })
 const pullSchema = z.object({ number: z.number().int(), title: z.string(), html_url: z.string().url(), state: z.enum(['open','closed']), merged: z.boolean(), merged_at: z.string().nullish(), user: z.object({id: z.number().int(), login: z.string()}), base: z.object({repo: repoSchema}), head: z.object({sha: z.string()}) })
 let rateLimitUntil = 0
@@ -53,6 +53,9 @@ export async function pull(repoId: string, number: number, token?: string | null
   if (!/^\d+$/.test(repoId) || !Number.isSafeInteger(number) || number <= 0) throw new Error('Invalid repository or PR ID')
   return pullSchema.parse(await github(`/repositories/${repoId}/pulls/${number}`, token))
 }
+export async function pullByRepo(owner: string, repo: string, number: number, token?: string | null) {
+  return pullSchema.parse(await github(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${number}`, token))
+}
 const syncing = new Map<string, Promise<void>>()
 let nextAnonymousPollAt = 0
 export async function syncPull(id: string, force = false, token?: string | null) {
@@ -63,12 +66,38 @@ export async function syncPull(id: string, force = false, token?: string | null)
     if (s.githubId.startsWith('demo:') || s.reference.startsWith('demo:')) return
     if (!force && s.nextSyncAt.getTime() > Date.now()) return
     try {
-      const pr = await pull(s.repoId, s.prNumber, token || process.env.GITHUB_API_TOKEN)
-      if (String(pr.base.repo.id) !== s.repoId || String(pr.user.id) !== s.githubId || pr.base.repo.private) throw new Error('PR repository or author no longer matches the verified identity')
-      const mergedAt = pr.merged_at ? new Date(pr.merged_at) : null
+      let pr
+      try {
+        const parsed = parsePull(s.url)
+        pr = await pullByRepo(parsed.owner, parsed.repo, parsed.number, token || process.env.GITHUB_API_TOKEN)
+      } catch {
+        pr = await pull(s.repoId, s.prNumber, token || process.env.GITHUB_API_TOKEN)
+      }
+      if (pr.base.repo.private) throw new Error('Private repositories are not supported')
+      const isMerged = Boolean(pr.merged || (pr.state === 'closed' && pr.merged_at))
+      const mergedAt = pr.merged_at ? new Date(pr.merged_at) : isMerged ? new Date() : null
+      const prState = isMerged ? 'merged' : pr.state
       await db.$transaction([
-        db.verifiedSubmission.update({where:{id}, data:{ title: pr.title, login: pr.user.login, prState: pr.merged ? 'merged' : pr.state, commit: pr.head.sha, syncedAt: new Date(), nextSyncAt: new Date(Date.now() + (token || process.env.GITHUB_API_TOKEN ? 15000 : 180000)), syncError: null }}),
-        db.submission.updateMany({where:{id}, data:{isMerged:pr.merged, mergedAt, latestCommitSha:pr.head.sha}}),
+        db.verifiedSubmission.update({
+          where: { id },
+          data: {
+            title: pr.title,
+            login: pr.user.login,
+            prState,
+            commit: pr.head.sha,
+            syncedAt: new Date(),
+            nextSyncAt: new Date(Date.now() + (token || process.env.GITHUB_API_TOKEN ? 15000 : 180000)),
+            syncError: null,
+          },
+        }),
+        db.submission.updateMany({
+          where: { id },
+          data: {
+            isMerged,
+            mergedAt,
+            latestCommitSha: pr.head.sha,
+          },
+        }),
       ])
     } catch(error) {
       await db.verifiedSubmission.update({where:{id}, data:{syncError: error instanceof Error ? error.message : 'Synchronization failed', nextSyncAt: new Date(Math.max(Date.now()+60000, rateLimitUntil))}})

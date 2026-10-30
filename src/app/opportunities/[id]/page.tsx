@@ -21,7 +21,12 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
   const project = opportunity
     ? data.projects.find((p) => p.id === opportunity.projectId || p.repoId === opportunity.projectId || (!!p.onChainId && String(p.onChainId) === opportunity.projectId))
     : data.projects.find((p) => p.id === oppId || p.repoId === oppId || (!!p.onChainId && String(p.onChainId) === oppId))
-  const submissions = data.submissions.filter((s) => s.opportunityId === oppId || (opportunity && s.opportunityId === opportunity.id))
+  const submissions = data.submissions.filter(
+    (s) =>
+      s.opportunityId === oppId ||
+      (opportunity && s.opportunityId === opportunity.id) ||
+      (opportunity?.onChainId && s.opportunityId === String(opportunity.onChainId))
+  )
   const [prUrl, setPrUrl] = useState('')
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -44,7 +49,13 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
   const deadlinePassed = !!now && new Date(opportunity.deadline).getTime() <= now
   const canSubmit = opportunity.state === 'Open' && !!now && !deadlinePassed
   const closed = opportunity.state !== 'Open' || deadlinePassed
-  const paidWinner = submissions.find(s => s.id === opportunity.selectedSubmissionId || s.status === 'Paid' || s.payoutTxHash)
+  const paidWinner = submissions.find(
+    s =>
+      s.id === opportunity.selectedSubmissionId ||
+      (s.onChainId && String(s.onChainId) === String(opportunity.selectedSubmissionId)) ||
+      s.status === 'Paid' ||
+      !!s.payoutTxHash
+  )
 
   return (
     <div className="cc-page">

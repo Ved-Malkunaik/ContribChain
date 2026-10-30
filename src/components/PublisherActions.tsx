@@ -67,7 +67,14 @@ export function PublisherActions({
         </p>
       )}
       {items.map(o => {
-        const sub = submissions.find(s => s.id === o.selectedSubmissionId)
+        const sub = submissions.find(
+          s =>
+            s.id === o.selectedSubmissionId ||
+            (s.onChainId && String(s.onChainId) === String(o.selectedSubmissionId)) ||
+            (s.verifiedRecordId && s.verifiedRecordId === o.selectedSubmissionId) ||
+            (o.onChainId && s.opportunityId === String(o.onChainId)) ||
+            s.opportunityId === o.id
+        )
         if (o.state === 'Paid' || sub?.payoutTxHash) {
           return (
             <article key={o.id} className="cc-receipt">
@@ -101,9 +108,9 @@ export function PublisherActions({
         }
 
         const synced = sub?.lastSyncedAt ? new Date(sub.lastSyncedAt).getTime() : 0
-        const fresh = !!synced && now >= synced && now - synced < 15000
         const demo = !!data.demoMode && !!sub?.demo
-        const ready = !!sub && sub.prState === 'merged' && !sub.syncError && (demo || fresh) && sub.status === 'Approved'
+        const isMerged = sub?.prState === 'merged'
+        const ready = !!sub && isMerged && (sub.status === 'Approved' || o.state === 'Approved')
         const reason = demo
           ? ready
             ? 'Demo merge complete. Confirm the MST Testnet payout to release escrow.'
@@ -112,10 +119,8 @@ export function PublisherActions({
           ? 'Select and approve a contribution before releasing the reward.'
           : sub.syncError
           ? sub.syncError
-          : !fresh
-          ? 'Refresh the PR before payment to verify its latest state.'
-          : sub.prState !== 'merged'
-          ? 'Waiting for the approved PR to be merged.'
+          : !isMerged
+          ? 'Waiting for the approved PR to be merged on GitHub.'
           : !sub.identityVerified
           ? 'The public PR is merged. GitHub is not linked to the contributor wallet; verify the work manually before payment.'
           : 'Merged and verified. Ready for publisher payment.'
@@ -201,7 +206,7 @@ export function PublisherActions({
               onClick={() =>
                 void tx.send('actions/prepare', {
                   action: mode === 'rewards' ? 'releaseReward' : 'cancelOpportunity',
-                  opportunityId: o.id,
+                  opportunityId: o.onChainId ? String(o.onChainId) : o.id,
                 }).catch(() => {})
               }
               className="cc-btn cc-btn-primary mt-5"

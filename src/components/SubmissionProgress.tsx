@@ -10,11 +10,17 @@ export function SubmissionProgress({
   submission: Submission
   opportunity?: Opportunity
 }) {
-  const notSelected = !!o?.selectedSubmissionId && o.selectedSubmissionId !== '0' && o.selectedSubmissionId !== s.id
+  const isSelected =
+    !!o?.selectedSubmissionId &&
+    o.selectedSubmissionId !== '0' &&
+    (o.selectedSubmissionId === s.id ||
+      (s.onChainId && String(s.onChainId) === String(o.selectedSubmissionId)) ||
+      (s.verifiedRecordId && s.verifiedRecordId === o.selectedSubmissionId))
+  const notSelected = !!o?.selectedSubmissionId && o.selectedSubmissionId !== '0' && !isSelected
   const paid = s.status === 'Paid' || !!s.payoutTxHash
   const review = notSelected
     ? 'Not selected'
-    : paid || s.status === 'Approved'
+    : paid || s.status === 'Approved' || isSelected
     ? 'Winner approved'
     : s.status === 'Pending'
     ? 'Awaiting review'
