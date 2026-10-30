@@ -117,8 +117,22 @@ export async function feed() {
     verifiedRecordId: s.id,
   }))
 
-  empty.projects = mappedProjects
-  empty.opportunities = mappedOpps
+  const mockProjectNames = new Set([
+    'uniswap v4 periphery & hooks',
+    'chainlink functions web3 toolkit',
+    'safe account modules',
+  ])
+  const mockProjectIds = new Set(['proj-1', 'proj-2', 'proj-3'])
+  const mockOppTitles = new Set([
+    'refactor ui components & state management',
+    'enhance poll analytics & export',
+    'gas-optimized twap hook with dynamic tick intervals',
+    'cross-chain state proof verifier with ccip callback',
+  ])
+  const mockOppIds = new Set(['opp-1', 'opp-2', 'onchain-opp-2', 'onchain-opp-3'])
+
+  empty.projects = mappedProjects.filter(p => !mockProjectIds.has(p.id) && !mockProjectNames.has(p.name.toLowerCase().trim()))
+  empty.opportunities = mappedOpps.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()))
   empty.submissions = mappedSubs
 
   // 2. Synchronize with live MST Testnet escrow contract if configured
@@ -220,18 +234,9 @@ export async function feed() {
                 projId = meta.projectId
               }
             } catch {}
-          } else if (i === 2n) {
-            title = 'Refactor UI Components & State Management'
-            description = 'Implement reactive UI state updates and improve modularity in StellarPoll components.'
-            acceptanceCriteria = 'Clean TypeScript types, unit tests passing, responsive layouts.'
-            difficulty = 'intermediate'
-            requiredSkills = ['React', 'TypeScript', 'TailwindCSS']
-          } else if (i === 3n) {
-            title = 'Enhance Poll Analytics & Export'
-            description = 'Add real-time vote share analytics and CSV export capability.'
-            acceptanceCriteria = 'Real-time charts, fast exports, accurate vote calculation.'
-            difficulty = 'beginner'
-            requiredSkills = ['JavaScript', 'Web3']
+          } else {
+            // Do not synthesize placeholder mock opportunities
+            continue
           }
 
           const createdOpp: Opportunity = {
@@ -341,29 +346,45 @@ export async function feed() {
           }
           empty.submissions.push(newSub)
 
-          await db.submission.upsert({
-            where: { id: newSub.id },
-            create: {
-              id: newSub.id,
-              opportunityId: empty.opportunities.find(o => o.onChainId === Number(c[1]) || o.id === contribOppIdStr)?.id || contribOppIdStr,
-              contributorAddress: contributorAddr,
-              githubUsername: newSub.githubUsername,
-              prUrl,
-              prNumber,
-              repoOwner: parsePull(prUrl).owner,
-              repoName: parsePull(prUrl).repo,
-              notes: newSub.notes,
-              status: contribStatusNum === 2 ? 'APPROVED' : contribStatusNum === 4 ? 'PAID' : 'PENDING',
-              isMerged: true,
-              onChainId: contribIdNum,
+          const parsed = parsePull(prUrl)
+          const existingRepoSub = await db.submission.findUnique({
+            where: {
+              repoOwner_repoName_prNumber: {
+                repoOwner: parsed.owner,
+                repoName: parsed.repo,
+                prNumber,
+              },
             },
-            update: {
-              onChainId: contribIdNum,
-              status: contribStatusNum === 2 ? 'APPROVED' : contribStatusNum === 4 ? 'PAID' : 'PENDING',
-              isMerged: true,
-              contributorAddress: contributorAddr,
-            },
-          }).catch(() => {})
+          }).catch(() => null)
+
+          if (existingRepoSub) {
+            await db.submission.update({
+              where: { id: existingRepoSub.id },
+              data: {
+                onChainId: contribIdNum,
+                status: contribStatusNum === 2 ? 'APPROVED' : contribStatusNum === 4 ? 'PAID' : 'PENDING',
+                isMerged: true,
+                contributorAddress: contributorAddr,
+              },
+            }).catch(() => {})
+          } else {
+            await db.submission.create({
+              data: {
+                id: newSub.id,
+                opportunityId: empty.opportunities.find(o => o.onChainId === Number(c[1]) || o.id === contribOppIdStr)?.id || contribOppIdStr,
+                contributorAddress: contributorAddr,
+                githubUsername: newSub.githubUsername,
+                prUrl,
+                prNumber,
+                repoOwner: parsed.owner,
+                repoName: parsed.repo,
+                notes: newSub.notes,
+                status: contribStatusNum === 2 ? 'APPROVED' : contribStatusNum === 4 ? 'PAID' : 'PENDING',
+                isMerged: true,
+                onChainId: contribIdNum,
+              },
+            }).catch(() => {})
+          }
 
           if (v) {
             await db.verifiedSubmission.update({
@@ -465,6 +486,9 @@ export async function feed() {
       })
     }
   }
+
+  empty.projects = empty.projects.filter(p => !mockProjectIds.has(p.id) && !mockProjectNames.has(p.name.toLowerCase().trim()))
+  empty.opportunities = empty.opportunities.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()))
 
   // 3. Compute stats
   for (const p of empty.projects) {
