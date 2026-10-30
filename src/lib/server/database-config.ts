@@ -4,12 +4,21 @@ export type DatabaseConfig =
 
 type Environment = {
   VERCEL?: string
+  NEXT_PHASE?: string
   DATABASE_URL?: string
   TURSO_DATABASE_URL?: string
   TURSO_AUTH_TOKEN?: string
 }
 
 export function resolveDatabaseConfig(env: Environment): DatabaseConfig {
+  if (env.NEXT_PHASE === 'phase-production-build') {
+    const buildUrl = env.DATABASE_URL?.trim()
+    return {
+      kind: 'sqlite',
+      url: buildUrl?.startsWith('file:') ? buildUrl : 'file:./dev.db',
+    }
+  }
+
   const url = env.TURSO_DATABASE_URL?.trim()
   const authToken = env.TURSO_AUTH_TOKEN?.trim()
 

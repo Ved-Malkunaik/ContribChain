@@ -68,11 +68,15 @@ async function ensureLibsqlSchema(url: string, authToken: string) {
 
 const databaseConfig = resolveDatabaseConfig({
   VERCEL: process.env.VERCEL,
+  NEXT_PHASE: process.env.NEXT_PHASE,
   DATABASE_URL: process.env.DATABASE_URL,
   TURSO_DATABASE_URL: process.env.TURSO_DATABASE_URL,
   TURSO_AUTH_TOKEN: process.env.TURSO_AUTH_TOKEN,
 })
-if (databaseConfig.kind === 'sqlite') ensureLocalDatabaseInitialized(databaseConfig.url)
+const isNextBuildPhase = process.env.NEXT_PHASE === 'phase-production-build'
+if (databaseConfig.kind === 'sqlite' && !isNextBuildPhase) {
+  ensureLocalDatabaseInitialized(databaseConfig.url)
+}
 
 const globalDb = globalThis as unknown as { contribchainDb?: PrismaClient }
 let client = globalDb.contribchainDb
