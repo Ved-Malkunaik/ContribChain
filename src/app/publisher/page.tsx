@@ -27,12 +27,14 @@ export default function PublisherHubPage() {
   const identity = useIdentity()
   const tx = useTransaction()
   const now = useNow()
-  const projects = data.projects.filter(p => p.publisherUserId
-    ? p.publisherUserId === identity.session?.userId
-    : p.publisherAddress.toLowerCase() === address?.toLowerCase())
-  const opportunities = data.opportunities.filter(o => o.publisherUserId
-    ? o.publisherUserId === identity.session?.userId
-    : o.publisherAddress.toLowerCase() === address?.toLowerCase())
+  const projects = data.projects.filter(p =>
+    p.publisherAddress.toLowerCase() === address?.toLowerCase() ||
+    (!!p.publisherUserId && p.publisherUserId === identity.session?.userId)
+  )
+  const opportunities = data.opportunities.filter(o =>
+    o.publisherAddress.toLowerCase() === address?.toLowerCase() ||
+    (!!o.publisherUserId && o.publisherUserId === identity.session?.userId)
+  )
   const submissions = data.submissions.filter(s => opportunities.some(o => o.id === s.opportunityId))
   const totalEscrow = formatEther(opportunities.reduce((sum, o) => sum + parseEther(o.remainingEscrowEth || '0'), 0n))
   const awaitingPayment = opportunities.filter(o => o.state === 'Approved').length

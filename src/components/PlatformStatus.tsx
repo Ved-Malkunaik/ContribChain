@@ -23,24 +23,29 @@ export function IdentityPanel() {
       <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
       <div className="flex-1 space-y-2">
         <p>
-          GitHub: {identity.session?.authenticated
-            ? identity.session.githubUsername ? `@${identity.session.githubUsername}` : identity.session.name || identity.session.githubId
-            : 'Not connected'}
+          GitHub: {identity.githubLinked
+            ? identity.session?.githubUsername ? `@${identity.session.githubUsername}` : identity.session?.name || identity.session?.githubId
+            : 'Not linked (optional)'}
           <span className="text-[#55555f] mx-2">/</span>
-          Wallet: {identity.linked ? 'Verified' : 'Not linked'}
+          Wallet: {identity.linked ? 'Verified' : identity.walletReady ? 'Ready' : 'Not connected'}
         </p>
-        {!identity.session?.authenticated ? (
+        {!identity.githubLinked ? (
           <form action="/api/auth/signin" method="get">
-            <button className="cc-link">Connect GitHub</button>
+            <button className="cc-link">Link GitHub (optional)</button>
           </form>
-        ) : (
+        ) : !identity.linked ? (
           <div className="cc-inline">
-            <button disabled={identity.busy || identity.linked} onClick={() => void identity.link()} className="cc-link disabled:opacity-40">
-              {identity.busy ? 'Awaiting signature…' : identity.linked ? 'Wallet linked' : 'Verify wallet ownership'}
+            <button disabled={identity.busy} onClick={() => void identity.link()} className="cc-link disabled:opacity-40">
+              {identity.busy ? 'Awaiting signature…' : 'Link GitHub to this wallet'}
             </button>
             <form action="/api/auth/signout" method="get">
               <button className="cc-link">Sign out</button>
             </form>
+          </div>
+        ) : (
+          <div className="cc-inline">
+            <span className="text-xs text-emerald-300">Wallet and GitHub linked</span>
+            <form action="/api/auth/signout" method="get"><button className="cc-link">Sign out</button></form>
           </div>
         )}
         {identity.error && <p role="alert" className="text-[#e5a1a8]">{identity.error}</p>}

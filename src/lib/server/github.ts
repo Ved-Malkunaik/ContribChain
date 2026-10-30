@@ -9,7 +9,8 @@ const pullSchema = z.object({ number: z.number().int(), title: z.string(), html_
 let rateLimitUntil = 0
 export async function github(path: string, token?: string | null) {
   if (Date.now() < rateLimitUntil) throw new Error('GitHub rate limit backoff; retry later')
-  const response = await fetch('https://api.github.com' + path, { headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(token ? {Authorization: `Bearer ${token}`} : {}) }, cache: 'no-store', signal: AbortSignal.timeout(10000) })
+  const accessToken = token || process.env.GITHUB_API_TOKEN
+  const response = await fetch('https://api.github.com' + path, { headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(accessToken ? {Authorization: `Bearer ${accessToken}`} : {}) }, cache: 'no-store', signal: AbortSignal.timeout(10000) })
   if (response.status === 429 || (response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0')) {
     rateLimitUntil = Math.max(Date.now() + 60000, Number(response.headers.get('x-ratelimit-reset') || 0) * 1000)
   }

@@ -103,19 +103,21 @@ export function PublisherActions({
         const synced = sub?.lastSyncedAt ? new Date(sub.lastSyncedAt).getTime() : 0
         const fresh = !!synced && now >= synced && now - synced < 15000
         const demo = !!data.demoMode && !!sub?.demo
-        const ready = !!sub && (demo || !!sub.identityVerified) && sub.prState === 'merged' && !sub.syncError && (demo || fresh) && sub.status === 'Approved'
+        const ready = !!sub && sub.prState === 'merged' && !sub.syncError && (demo || fresh) && sub.status === 'Approved'
         const reason = demo
           ? ready
             ? 'Demo merge complete. Confirm the MST Testnet payout to release escrow.'
             : 'Winner approved. Simulate the demo PR merge, then confirm payment.'
-          : !sub?.identityVerified
-          ? 'The selected contribution has no verified GitHub author.'
+          : !sub
+          ? 'Select and approve a contribution before releasing the reward.'
           : sub.syncError
           ? sub.syncError
           : !fresh
           ? 'Refresh the PR before payment to verify its latest state.'
           : sub.prState !== 'merged'
           ? 'Waiting for the approved PR to be merged.'
+          : !sub.identityVerified
+          ? 'The public PR is merged. GitHub is not linked to the contributor wallet; verify the work manually before payment.'
           : 'Merged and verified. Ready for publisher payment.'
 
         return (

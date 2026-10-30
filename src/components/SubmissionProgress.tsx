@@ -32,11 +32,9 @@ export function SubmissionProgress({
           <strong>
             {s.demo
               ? 'Simulated ' + s.prState
-              : s.identityVerified
-              ? s.prState === 'merged'
-                ? 'Merged'
-                : s.prState
-              : 'Unverified'}
+              : s.prState === 'merged'
+              ? 'Merged'
+              : s.prState || 'Unknown'}
           </strong>
         </div>
         <div>
@@ -56,14 +54,10 @@ export function SubmissionProgress({
           Demo PR · GitHub identity and merge are simulated. Wallet payments are real {currencySymbol} on MST Testnet.
         </p>
       )}
-      {s.identityVerified && (
-        <p className="text-[10px] text-[#656571]">
-          Last sync: {s.lastSyncedAt || 'Never'} · Commit: {s.prCommit?.slice(0, 12) || 'Unknown'}
-        </p>
-      )}
+      {!s.demo && <p className="text-[10px] text-[#656571]">Last sync: {s.lastSyncedAt || 'Pending'} · Commit: {s.prCommit?.slice(0, 12) || 'Unknown'}</p>}
       {s.syncError && <p className="text-[11px] text-[#e8cc95]">{s.syncError}</p>}
       {!s.identityVerified && !s.demo && (
-        <p className="text-[11px] text-[#e8cc95]">Unverified author. Application review and payout are unavailable.</p>
+        <p className="text-[11px] text-[#e8cc95]">Public PR status is tracked. This wallet is not linked to the GitHub author, so the publisher should verify the contribution before approval.</p>
       )}
     </div>
   )

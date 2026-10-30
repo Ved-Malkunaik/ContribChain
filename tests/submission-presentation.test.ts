@@ -57,8 +57,8 @@ test('pending submissions cannot be reviewed after another winner is selected or
   }
 })
 
-test('unverified and simulated submissions cannot be reviewed', () => {
-  assert.equal(getSubmissionPresentation({ ...submission, identityVerified: false }, opportunity).action, null)
+test('simulated submissions cannot be reviewed; unverified submissions allow publisher review', () => {
+  assert.equal(getSubmissionPresentation({ ...submission, identityVerified: false }, opportunity).action, 'review')
   assert.equal(getSubmissionPresentation({ ...submission, identityVerified: false, demo: true }, opportunity).action, null)
   assert.equal(getSubmissionPresentation({ ...submission, identityVerified: true, demo: true }, opportunity).action, null)
 })

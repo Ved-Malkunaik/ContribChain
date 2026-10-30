@@ -79,7 +79,7 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
               {submissions.map((sub) => <article key={sub.id} className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-5">
                 <div className="mb-4 flex flex-wrap items-center gap-2"><span className="mr-auto text-sm font-semibold text-white">@{sub.githubUsername}</span><span className="cc-badge">PR #{sub.prNumber}</span><StatusBadge status={sub.status} /></div>
                 <p className="text-sm font-medium leading-6 text-neutral-200">{sub.prTitle}</p>
-                <p className="mt-2 text-xs leading-6 text-neutral-500">GitHub: {sub.demo ? `demo ${sub.prState}` : sub.identityVerified ? sub.prState : 'unverified'}</p>
+                <p className="mt-2 text-xs leading-6 text-neutral-500">GitHub PR: {sub.demo ? `demo ${sub.prState}` : `${sub.prState}${sub.identityVerified ? ' · wallet linked' : ' · wallet not linked'}`}</p>
                 <SubmissionProgress submission={sub} opportunity={opportunity} />
                 <div className="mt-4 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-4 xl:flex-row xl:items-center">
                   <p className="min-w-0 break-all font-mono text-[11px] leading-5 text-neutral-500">Contributor: {sub.contributorAddress}</p>
@@ -105,7 +105,7 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
               <div className="flex flex-wrap justify-between gap-2"><span className="text-neutral-500">Refund policy</span><span className="text-neutral-300">Expired only</span></div>
               <div className="break-words leading-6"><EscrowReadout onChainId={opportunity.onChainId} /></div>
             </div>
-            <p className="mt-5 text-xs leading-7 text-neutral-400">{data.demoMode ? `After publisher approval and the simulated demo merge, publisher confirms the MST Testnet escrow release: 97% goes to the contributor and 3% to platform maintenance.` : `Once approved and merged on GitHub, the publisher executes on-chain release: 97% goes directly to the winner and 3% platform fee is deducted on payout.`}</p>
+            <p className="mt-5 text-xs leading-7 text-neutral-400">{data.demoMode ? `After publisher approval and the simulated demo merge, publisher confirms the MST Testnet escrow release: 97% goes to the contributor and 3% to platform maintenance.` : `Once the public PR is merged and the publisher approves the contribution, the publisher executes on-chain release: 97% goes directly to the winner and 3% platform fee is deducted on payout. GitHub linking is optional; unlinked contributions require publisher review of the PR author and work.`}</p>
           </section>
           <section className="cc-panel">
             <p className="cc-eyebrow mb-4">{closed ? 'OPPORTUNITY OUTCOME' : 'YOUR NEXT MOVE'}</p><h2 className="text-xl font-semibold tracking-tight text-white">{opportunity.state === 'Paid' ? 'Reward completed.' : closed ? 'Submissions closed.' : 'Submit a contribution'}</h2>
@@ -132,6 +132,7 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
                 <p className="mt-3 text-xs leading-7 text-neutral-400">Submit and obtain publisher approval before the deadline. Approval fixes the winner; payment requires a separate publisher transaction.</p>
                 <div className="cc-field"><label htmlFor="pull-request-url">{data.demoMode ? 'Demo pull request URL *' : 'GitHub pull request URL *'}</label>
                   <input id="pull-request-url" type="url" required value={prUrl} onChange={(e) => setPrUrl(e.target.value)} placeholder="https://github.com/owner/repo/pull/123" className="cc-input" />
+                  <p className="text-xs text-neutral-500 mt-1">Submit your public GitHub PR URL. GitHub account linking is optional; your connected wallet receives the reward upon approval and merge.</p>
                   {data.demoMode && <div className="mt-3 rounded-xl border border-amber-300/15 bg-amber-300/5 p-4"><button type="button" className="text-xs text-amber-200 underline underline-offset-4" onClick={() => setPrUrl(project.repoUrl.replace(/\/$/, '') + '/pull/1')}>Use example demo PR</button><p className="mt-3 text-xs leading-6 text-amber-200/70">This PR does not need to exist. GitHub identity and merge are simulated; submitting still records a real MST Testnet wallet transaction.</p></div>}
                 </div>
                 <div className="cc-field"><label htmlFor="reviewer-notes">Notes for reviewer <span className="text-neutral-600">(optional)</span></label><textarea id="reviewer-notes" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Describe your changes and how you tested them…" className="cc-input" /></div>

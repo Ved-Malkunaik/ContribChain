@@ -25,7 +25,7 @@ export function getSubmissionPresentation(
   } else if (
     submission.status === 'Pending' &&
     opportunity?.state === 'Open' &&
-    submission.identityVerified && !submission.demo
+    !submission.demo
   ) {
     const deadline = new Date(opportunity.deadline).getTime()
     if (now > 0 && deadline > now) action = 'review'

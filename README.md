@@ -2,13 +2,12 @@
 
 ## Local setup
 
-Every publisher and contributor action requires a real GitHub OAuth session and a wallet signature proving ownership of the connected BridgeKey address. The GitHub account ID and wallet link are stored on one persistent profile; wallet-only sessions and simulated GitHub identities cannot perform protected actions. Public project browsing remains available without signing in.
+Publisher and contributor actions use the connected wallet. GitHub linking is optional: publishers can register public repositories and contributors can submit public PR URLs for status tracking. If a contributor does not link GitHub, the publisher must review the PR author and work before approving the reward.
 
-1. Configure GitHub OAuth and `AUTH_SECRET` in `.env`, then sign in with GitHub.
-2. Connect BridgeKey on MST Testnet and choose **Verify wallet ownership**. The wallet signs a short-lived challenge; ContribChain never requests a private key.
-3. A publisher registers a public GitHub repository owned by the signed-in GitHub account, then creates and funds an opportunity.
-4. A contributor signs in with their own GitHub account and wallet, submits a real pull request to the registered repository, and confirms the on-chain submission.
-5. After the publisher approves the contribution and GitHub confirms the merge, the publisher releases the escrow reward. Transaction hashes and MSTScan links appear in the transaction status and publisher history.
+1. Connect BridgeKey or another wallet on MST Testnet. GitHub OAuth is optional.
+2. A publisher registers a public GitHub repository, then creates and funds an opportunity.
+3. A contributor connects a wallet, submits a public PR URL for the registered repository, and confirms the on-chain submission.
+4. ContribChain tracks the public PR state. After it is merged and the publisher approves the contribution, the publisher releases the escrow reward. For unlinked GitHub authors, publisher approval includes manual author/work review.
 
 Confirmed MetaMask smart-account transactions are supported through the DelegationManager execution envelope. Reloading the app automatically checks a stored pending transaction instead of requiring another payment.
 
@@ -67,12 +66,11 @@ Read **`../contracts/REMIX.md`** for Solidity **0.8.28**, optimizer **200**, **P
 
 ## GitHub OAuth and wallet ownership
 
-1. Create a GitHub OAuth App or GitHub App. Set its homepage URL to `http://localhost:3000` and its callback URL to **`http://localhost:3000/api/auth/callback/github`**. For a GitHub App, use the OAuth Client ID and Client Secret from its settings; the numeric App ID and private key are not used for sign-in. Replace the origin in both URLs for HTTPS/tunnel hosting.
-2. Set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and a random `AUTH_SECRET` in the environment used by the running server. Restart the local server after editing `.env`; for hosted deployments, set these as server-side deployment environment variables and redeploy/restart. A local `.env` does not configure an already-running server on another machine or hosting provider. Then use “Sign in with GitHub” from either dashboard. Auth.js manages state/PKCE, CSRF-protected auth actions and database sessions. Cookies are HttpOnly/SameSite and secure over HTTPS. Scope: `read:user`.
-3. Connect MetaMask on Sepolia and choose “Prove wallet ownership.” The signature challenge binds wallet, session, domain, chain, random nonce and five-minute expiry. It is single-use. Session generations invalidate stale challenges when accounts change.
-4. Account changes/disconnect clear the session's wallet authority. Prove each new active wallet. Wallet connection alone and GitHub login alone cannot authorize writes. Stable GitHub IDs are stored; names are display fields. A wallet linked to another GitHub identity is refused.
+1. GitHub linking is optional. To enable it, configure a GitHub OAuth App or GitHub App and set its callback URL to `APP_URL/api/auth/callback/github`. For a GitHub App, use its OAuth Client ID and Client Secret; the numeric App ID and private key are not used for sign-in.
+2. Set `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and a random `AUTH_SECRET` in the server environment if you want to offer GitHub linking. Public repository and PR tracking works from submitted URLs without contributor OAuth.
+3. Wallet transactions are signed in the connected wallet. A GitHub account link can additionally verify that the wallet belongs to the PR author. Without that link, publisher approval is the manual review checkpoint.
 
-Use separate browser profiles for publisher and contributor. Only publisher-owned public repositories are supported; organization repositories are deferred. OAuth tokens remain in the server database and are never returned to frontend session/feed APIs. Protect database files and backups.
+Only public repositories are supported. OAuth tokens remain in the server database and are never returned to frontend session/feed APIs. Protect database files and backups.
 
 ## Webhooks and near-real-time synchronization
 
@@ -92,12 +90,12 @@ UI refresh is approximately **15 seconds**, with a shared server/database cache,
 
 ## Manual final demonstration — pending
 
-1. Publisher connects MetaMask, logs into GitHub, proves wallet ownership and registers an owned repository with a required live dApp URL. Registration metadata remains a draft until its successful receipt is reconciled.
+1. Publisher connects a wallet and registers a public repository with a required live dApp URL.
 2. Create an opportunity with acceptance criteria, skills, positive ETH reward and deadline. Review actual estimated gas and refund policy before MetaMask confirmation. Reward has at most 18 decimal places and the deposit must exactly match integer wei.
-3. Contributor sees the funded opportunity, links GitHub/wallet, opens a real PR and submits its URL. Backend verifies stable repository/author IDs, then contributor confirms the on-chain submission.
+3. Contributor sees the funded opportunity, connects a wallet, opens a real PR and submits its URL. The backend verifies the public PR and its base repository, then the contributor confirms the on-chain submission.
 4. Publisher approves the winner on-chain **before expiry**. Review, GitHub state and payment are shown separately. Approval fixes the contributor and cannot be refunded.
 5. Merge the exact PR on GitHub. Check last sync/latest head commit, use manual refresh if needed, then wait for Reward ready. Closed-unmerged PRs must not qualify.
-6. Choose “Confirm and pay.” Backend rechecks contract winner, canonical receipt, author/repository and fresh merge state. Browser simulates, then MetaMask requests confirmation. **Value = zero:** escrow supplies the bounty; publisher supplies gas only.
+6. Choose “Confirm and pay.” Backend rechecks contract winner, canonical receipt, repository and fresh merge state. The publisher manually reviews unlinked authors. Browser simulates, then MetaMask requests confirmation. **Value = zero:** escrow supplies the bounty; publisher supplies gas only.
 7. Wait for a successful receipt and two confirmations. Check recipient, exact amount and explorer link in both dashboards. Refresh; data persists. A second release must fail.
 8. Reject another submission and verify its opportunity stays Open. Use Remix VM with a short deadline to demonstrate a valid expired refund; normal app deadlines are 1–365 days.
 9. Check rejection, wrong chain, insufficient gas, RPC outage, reverted receipt, speed-up/cancel and reload. Pending intent includes wallet, target, calldata, amount, sent block and observed nonce. Use the recovery panel after reload. If the original hash was dropped while closed, paste the replacement hash from MetaMask/Etherscan. Only a matching intended transaction can confirm success; changed/cancelled actions cannot.

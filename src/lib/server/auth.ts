@@ -40,7 +40,7 @@ export const appOrigin = () => {
   ensureEnvLoaded()
   return new URL((process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim()).origin
 }
-export const demoMode = () => process.env.NODE_ENV !== 'test'
+export const demoMode = () => process.env.NODE_ENV === 'development' && process.env.DEMO_MODE === 'true'
 export const sessionCookie = 'contribchain.session-token'
 export function authConfig(): AuthConfig {
   ensureEnvLoaded()
@@ -101,8 +101,34 @@ export function assertOrigin(request: Request) {
   const origin = request.headers.get('origin')
   if (!origin) throw new Error('Missing request origin')
   let requestOrigin: string
-  try { requestOrigin = new URL(origin).origin } catch { throw new Error('Invalid request origin') }
-  if (requestOrigin !== appOrigin()) throw new Error('Invalid request origin. Set APP_URL to this browser origin.')
+  try {
+    requestOrigin = new URL(origin).origin
+  } catch {
+    throw new Error('Invalid request origin')
+  }
+
+  // 1. Configured canonical origin
+  if (requestOrigin === appOrigin()) return
+
+  // 2. Request destination origin
+  try {
+    if (requestOrigin === new URL(request.url).origin) return
+  } catch { /* ignore */ }
+
+  // 3. Current host header
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host')
+  if (host) {
+    if (requestOrigin === `http://${host}` || requestOrigin === `https://${host}`) return
+  }
+
+  // 4. Local loopback origin
+  try {
+    const parsed = new URL(requestOrigin)
+    const isLocal = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]'
+    if (isLocal) return
+  } catch { /* ignore */ }
+
+  throw new Error('Invalid request origin. Set APP_URL to this browser origin.')
 }
 export async function currentSession(request: Request) {
   const token = request.headers.get('cookie')?.split(';').map(x => x.trim()).find(x => x.startsWith(sessionCookie + '='))?.slice(sessionCookie.length + 1)
@@ -121,36 +147,41 @@ export async function currentSession(request: Request) {
               },
             }).catch(() => {})
           }
-          return { ...session, github }
+          const walletHeader = request.headers.get('x-wallet-address')?.toLowerCase()
+          const validWalletHeader = walletHeader && isAddress(walletHeader) ? walletHeader : undefined
+          if (!validWalletHeader || !session.wallet || session.wallet.toLowerCase() === validWalletHeader) {
+            return { ...session, wallet: session.wallet || validWalletHeader, github }
+          }
         }
       }
     } catch { /* DB read error or unmigrated session */ }
   }
 
-  // Testing & wallet-first flow: allow publisher/contributor with connected wallet to publish or contribute without GitHub OAuth when not in strict test runner
-  if (process.env.NODE_ENV !== 'test') {
-    const walletHeader = request.headers.get('x-wallet-address')?.toLowerCase()
-    if (walletHeader && isAddress(walletHeader)) {
-      const existing = await db.user.findUnique({ where: { walletAddress: walletHeader } }).catch(() => null)
-      const userId = existing?.id || `user-${walletHeader.slice(2, 12)}`
-      return {
-        id: `session-${walletHeader.slice(2, 10)}`,
-        userId,
-        wallet: walletHeader,
-        generation: 0,
-        github: {
-          providerAccountId: existing?.githubId || 'wallet:' + walletHeader,
-          access_token: '',
-        },
-        user: {
-          id: userId,
-          name: existing?.name || `${walletHeader.slice(0, 6)}...${walletHeader.slice(-4)}`,
-          githubUsername: existing?.githubUsername || `${walletHeader.slice(2, 8)}`,
-          githubId: existing?.githubId || 'wallet:' + walletHeader,
-          walletAddress: walletHeader,
-        },
-        githubUsername: existing?.githubUsername || `${walletHeader.slice(2, 8)}`,
-      }
+  // Wallet-first flow: allow publisher/contributor with connected wallet to publish or contribute without GitHub OAuth
+  const walletHeader = request.headers.get('x-wallet-address')?.toLowerCase()
+  if (walletHeader && isAddress(walletHeader)) {
+    const existing = await db.user.findUnique({ where: { walletAddress: walletHeader } }).catch(() => null)
+    const existingLink = await db.walletLink.findUnique({ where: { address: walletHeader } }).catch(() => null)
+    const userId = existingLink?.userId || existing?.id || `user-${walletHeader.slice(2, 12)}`
+    const githubId = existingLink?.githubId || existing?.githubId || 'wallet:' + walletHeader
+    const githubUsername = existing?.githubUsername || `${walletHeader.slice(2, 8)}`
+    return {
+      id: `session-${walletHeader.slice(2, 10)}`,
+      userId,
+      wallet: walletHeader,
+      generation: 0,
+      github: {
+        providerAccountId: githubId,
+        access_token: '',
+      },
+      user: {
+        id: userId,
+        name: existing?.name || `${walletHeader.slice(0, 6)}...${walletHeader.slice(-4)}`,
+        githubUsername,
+        githubId,
+        walletAddress: walletHeader,
+      },
+      githubUsername,
     }
   }
 
@@ -162,12 +193,6 @@ export async function requireWallet(request: Request) {
   const walletHeader = request.headers.get('x-wallet-address')?.toLowerCase()
   if (!s || !s.wallet || (walletHeader && walletHeader !== s.wallet.toLowerCase())) {
     throw new Error('Connect your wallet first')
-  }
-  if (process.env.NODE_ENV === 'test') {
-    const link = await db.walletLink.findUnique({ where: { address: s.wallet } }).catch(() => null)
-    if (!link || link.userId !== s.userId || link.githubId !== s.github.providerAccountId) {
-      throw new Error('This action requires a verified GitHub and wallet identity linked to the same profile')
-    }
   }
   return s
 }

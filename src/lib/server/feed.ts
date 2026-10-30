@@ -112,7 +112,7 @@ export async function feed() {
     payoutTxHash: s.paidTxHash || undefined,
     identityVerified: submissionWalletLinks.some(link =>
       link.address === s.contributorAddress.toLowerCase() &&
-      link.userId === s.contributorUserId &&
+      (!s.contributorUserId || link.userId === s.contributorUserId) &&
       link.githubId === s.githubUserId
     ),
     demo: Boolean(s.githubUsername?.startsWith('demo:')),
@@ -128,6 +128,19 @@ export async function feed() {
     try {
       await reconcile()
       await refreshDuePulls()
+      const trackedPulls = await db.verifiedSubmission.findMany({
+        where: { id: { in: empty.submissions.map(submission => submission.id) } },
+        select: { id: true, prState: true, commit: true, syncedAt: true, syncError: true },
+      }).catch(() => [])
+      const trackedById = new Map(trackedPulls.map(pull => [pull.id, pull]))
+      for (const submission of empty.submissions) {
+        const tracked = trackedById.get(submission.id)
+        if (!tracked) continue
+        submission.prState = tracked.prState as Submission['prState']
+        submission.prCommit = tracked.commit || undefined
+        submission.lastSyncedAt = tracked.syncedAt.toISOString()
+        submission.syncError = tracked.syncError || undefined
+      }
     } catch (error) {
       empty.syncError = error instanceof Error ? error.message : 'MST Testnet sync unavailable'
     }

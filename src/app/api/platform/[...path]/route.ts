@@ -55,12 +55,13 @@ async function verifiedSubmissionFor(
     const contributorLink = await db.walletLink.findUnique({
       where: { address: submission.contributorAddress.toLowerCase() },
     })
+    // If the contributor explicitly linked their GitHub account to their wallet, ensure it matches the PR author
     if (
-      !contributorLink ||
-      contributorLink.userId !== submission.contributorUserId ||
-      contributorLink.githubId !== verified.githubId
+      contributorLink &&
+      (contributorLink.githubId !== verified.githubId ||
+        (submission.contributorUserId && contributorLink.userId !== submission.contributorUserId))
     ) {
-      throw new Error('Contributor GitHub and wallet identity are no longer linked to the same profile')
+      throw new Error('This wallet is linked to a different GitHub identity than the pull request author')
     }
     const expectedRepo = parseRepo(opportunityRecord.project.repoUrl)
     const githubRepo = await repository(expectedRepo.owner, expectedRepo.repo, session?.github.access_token)
@@ -125,18 +126,20 @@ async function route(request: Request, context: { params: Promise<{ path: string
     }
     if (action === 'session') {
       const s = await currentSession(request)
+      const walletLink = s?.wallet ? await db.walletLink.findUnique({ where: { address: s.wallet.toLowerCase() } }).catch(() => null) : null
+      const walletVerified = Boolean(walletLink && walletLink.userId === s?.userId && walletLink.githubId === s?.github.providerAccountId)
+      const githubLinked = Boolean(s && !s.github.providerAccountId.startsWith('wallet:') && (s.github.access_token || walletVerified))
       return response(
         s
           ? {
               authenticated: true,
               userId: s.userId,
               githubId: s.github.providerAccountId,
-              githubUsername: s.user.githubUsername || undefined,
+              githubUsername: githubLinked ? s.user.githubUsername || undefined : undefined,
+              githubLinked,
               name: s.user.name,
               wallet: s.wallet,
-              walletVerified: Boolean(s.wallet && await db.walletLink.findFirst({
-                where: { address: s.wallet, userId: s.userId, githubId: s.github.providerAccountId },
-              })),
+              walletVerified,
               demoMode: demoMode(),
             }
           : { authenticated: false, demoMode: demoMode() }
@@ -243,22 +246,23 @@ async function route(request: Request, context: { params: Promise<{ path: string
 
   const s = await requireWallet(request)
   const wallet = s.wallet!
+  const walletLink = await db.walletLink.findUnique({ where: { address: wallet } }).catch(() => null)
+  const githubWalletVerified = Boolean(walletLink && walletLink.userId === s.userId && walletLink.githubId === s.github.providerAccountId)
+  const profileUserId = githubWalletVerified ? s.userId : null
 
   // Register Project: In ContribChainEscrow, projects & metadata are stored off-chain.
   if (action === 'projects/prepare') {
     const input = projectInput.parse(body)
     const { owner, repo } = parseRepo(input.repoUrl)
-    let gh = null
+    let repoId: string
+    let repoHtmlUrl: string = input.repoUrl
     try {
-      gh = await repository(owner, repo, s.github.access_token)
-    } catch { /* allow fallback when testing with wallet */ }
-    if (gh && s.github.access_token && s.github.providerAccountId && !s.github.providerAccountId.startsWith('wallet:')) {
-      if (gh.owner.type !== 'User' || String(gh.owner.id) !== s.github.providerAccountId) {
-        throw new Error('Use a public repository owned by your authenticated GitHub user')
-      }
+      const gh = await repository(owner, repo, s.github.access_token)
+      repoId = String(gh.id)
+      repoHtmlUrl = gh.html_url
+    } catch {
+      repoId = String(Math.abs(createHash('sha256').update(input.repoUrl.toLowerCase().trim()).digest().readInt32BE(0)) || 100000001)
     }
-    const repoId = gh ? String(gh.id) : String(Math.abs(createHash('sha256').update(input.repoUrl).digest().readInt32BE(0)) || 100000001)
-    const repoHtmlUrl = gh ? gh.html_url : input.repoUrl
 
     const m = await snapshot(
       'project',
@@ -276,7 +280,7 @@ async function route(request: Request, context: { params: Promise<{ path: string
     const dbProject = await db.project.create({
       data: {
         id: m.id,
-        publisherUserId: s.userId,
+        publisherUserId: profileUserId,
         publisherAddress: wallet,
         name: input.name,
         shortDescription: input.shortDescription,
@@ -313,7 +317,6 @@ async function route(request: Request, context: { params: Promise<{ path: string
       where: {
         OR: [{ id: input.projectId }, { repoId: input.projectId }],
         publisherAddress: wallet,
-        publisherUserId: s.userId,
       },
     })
     if (!project) throw new Error('Project not found')
@@ -357,7 +360,7 @@ async function route(request: Request, context: { params: Promise<{ path: string
       data: {
         id: m.id,
         projectId: project.id,
-        publisherUserId: s.userId,
+        publisherUserId: profileUserId,
         publisherAddress: wallet,
         title: input.title,
         taskType: input.taskType || 'feature',
@@ -405,30 +408,33 @@ async function route(request: Request, context: { params: Promise<{ path: string
 
     const onChainOppId = String(opp.onChainId)
     const url = parsePull(input.prUrl)
-
-    let repo = null
-    let pr = null
-    try {
-      repo = await repository(url.owner, url.repo, s.github.access_token)
-      if (repo) {
-        pr = await pull(String(repo.id), url.number, s.github.access_token)
-      }
-    } catch { /* allow test submissions when GitHub API is unauthenticated */ }
-
-    if (pr && s.github.access_token && !s.github.providerAccountId.startsWith('wallet:')) {
-      if (String(pr.user.id) !== s.github.providerAccountId || String(pr.base.repo.id) !== String(repo?.id)) {
-        throw new Error('PR author must be your linked GitHub identity and target the registered repository')
-      }
-      if (pr.state === 'closed' && !pr.merged) throw new Error('Closed, unmerged PRs cannot be submitted')
+    const projectRepo = parseRepo(opp.project.repoUrl)
+    if (projectRepo.owner.toLowerCase() !== url.owner.toLowerCase() || projectRepo.repo.toLowerCase() !== url.repo.toLowerCase()) {
+      throw new Error('Pull request must belong to the opportunity’s registered public repository')
     }
+    const repo = await repository(url.owner, url.repo, s.github.access_token)
+    if (
+      String(repo.id) !== opp.project.repoId &&
+      opp.project.repoId !== String(Math.abs(createHash('sha256').update(opp.project.repoUrl.toLowerCase().trim()).digest().readInt32BE(0)) || 100000001)
+    ) {
+      throw new Error('Pull request must belong to the opportunity’s registered public repository')
+    }
+    const pr = await pull(String(repo.id), url.number, s.github.access_token)
+    if (String(pr.base.repo.id) !== String(repo.id)) {
+      throw new Error('Pull request does not target the registered repository')
+    }
+    if (githubWalletVerified && String(pr.user.id) !== s.github.providerAccountId) {
+      throw new Error('This PR author does not match the GitHub account linked to your wallet')
+    }
+    if (pr.state === 'closed' && !pr.merged) throw new Error('Closed, unmerged PRs cannot be submitted')
 
     const id = randomUUID()
-    const repoId = repo ? String(repo.id) : opp.project.repoId
+    const repoId = String(repo.id)
     const reference = `${repoId}:${url.number}`
     const submissionHash = keccak256(toHex(reference))
-    const prTitle = pr?.title || `Contribution PR #${url.number}`
-    const authorLogin = pr?.user?.login || s.user?.githubUsername || `${wallet.slice(0, 6)}...${wallet.slice(-4)}`
-    const authorGithubId = pr ? String(pr.user.id) : (s.github.providerAccountId || 'wallet:' + wallet)
+    const prTitle = pr.title
+    const authorLogin = pr.user.login
+    const authorGithubId = String(pr.user.id)
 
     await db.$transaction(async tx => {
       await tx.verifiedSubmission.create({
@@ -441,12 +447,12 @@ async function route(request: Request, context: { params: Promise<{ path: string
           repoId,
           prNumber: url.number,
           reference,
-          url: pr?.html_url || input.prUrl,
+          url: pr.html_url,
           title: prTitle,
           login: authorLogin,
           notes: input.notes,
-          prState: pr ? (pr.merged ? 'merged' : pr.state) : 'open',
-          commit: pr?.head?.sha || '',
+          prState: pr.merged ? 'merged' : pr.state,
+          commit: pr.head.sha,
           syncedAt: new Date(),
           nextSyncAt: new Date(Date.now() + 15000),
         },
@@ -455,19 +461,19 @@ async function route(request: Request, context: { params: Promise<{ path: string
         data: {
           id,
           opportunityId: opp.id,
-          contributorUserId: s.userId,
+          contributorUserId: profileUserId,
           contributorAddress: wallet,
           githubUsername: authorLogin,
           githubUserId: authorGithubId,
-          prUrl: pr?.html_url || input.prUrl,
+          prUrl: pr.html_url,
           prNumber: url.number,
           repoOwner: url.owner,
           repoName: url.repo,
           notes: input.notes,
           status: 'PENDING',
-          isMerged: pr?.merged || false,
-          mergedAt: pr?.merged_at ? new Date(pr.merged_at) : null,
-          latestCommitSha: pr?.head?.sha || null,
+          isMerged: pr.merged,
+          mergedAt: pr.merged_at ? new Date(pr.merged_at) : null,
+          latestCommitSha: pr.head.sha,
         },
       })
     })

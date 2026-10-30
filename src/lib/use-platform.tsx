@@ -65,6 +65,7 @@ type Identity = {
   userId?: string
   githubId?: string
   githubUsername?: string
+  githubLinked?: boolean
   name?: string
   wallet?: string
   walletVerified?: boolean
@@ -77,12 +78,14 @@ export function useIdentity() {
   const { signMessageAsync } = useSignMessage()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const wallet = address?.toLowerCase()
   const session = useQuery({
-    queryKey: ['platform-session'],
-    queryFn: () => api<Identity>('session'),
+    queryKey: ['platform-session', wallet],
+    queryFn: () => api<Identity>('session', undefined, wallet),
     staleTime: 0,
   })
-  const linked = !!address && !!session.data?.walletVerified && session.data?.wallet === address.toLowerCase()
+  const linked = !!wallet && !!session.data?.walletVerified && session.data?.wallet === wallet
+  const walletReady = !!wallet && !!session.data?.authenticated && session.data.wallet === wallet
 
   useEffect(() => {
     if (
@@ -113,7 +116,7 @@ export function useIdentity() {
     }
   }
 
-  return { session: session.data, linked, link, error, busy }
+  return { session: session.data, linked, walletReady, githubLinked: !!session.data?.githubLinked, link, error, busy }
 }
 
 type Prepared = {
@@ -127,8 +130,8 @@ const pendingKey = 'contribchain.pending.v1'
 export function useTransaction() {
   const { address, chainId: connectedChain, connector } = useAccount()
   const identity = useQuery({
-    queryKey: ['platform-session'],
-    queryFn: () => api<Identity>('session'),
+    queryKey: ['platform-session', address?.toLowerCase()],
+    queryFn: () => api<Identity>('session', undefined, address),
     staleTime: 0,
   })
   const publicClient = usePublicClient({ chainId })
@@ -228,8 +231,8 @@ export function useTransaction() {
       if (!contractAddress || !publicClient) {
         throw new Error('MST Testnet escrow contract is not configured')
       }
-      if (!identity.data?.authenticated || !identity.data.walletVerified || identity.data.wallet !== address.toLowerCase()) {
-        throw new Error('Sign in with GitHub and verify this BridgeKey wallet before using protected platform actions')
+      if (!identity.data?.authenticated || identity.data.wallet !== address.toLowerCase()) {
+        throw new Error('Connect your wallet before using protected platform actions')
       }
       const prepared = await api<Prepared>(endpoint, body, address)
 

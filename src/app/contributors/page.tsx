@@ -23,14 +23,15 @@ export default function ContributorsHubPage() {
   }, [])
   const { data } = useFeed()
   const identity = useIdentity()
-  const githubUser = identity.session?.githubUsername
-  const userSubmissions = data.submissions.filter(s => s.contributorUserId
-    ? s.contributorUserId === identity.session?.userId
-    : s.contributorAddress.toLowerCase() === address?.toLowerCase())
+  const githubUser = identity.githubLinked ? identity.session?.githubUsername : undefined
+  const userSubmissions = data.submissions.filter(s =>
+    s.contributorAddress.toLowerCase() === address?.toLowerCase() ||
+    (!!s.contributorUserId && s.contributorUserId === identity.session?.userId)
+  )
   const paidSubmissions = userSubmissions.filter(s => s.status === 'Paid' && s.payoutTxHash)
   const earnedRewardsEth = formatEther(paidSubmissions.reduce((sum, s) => sum + parseEther(data.opportunities.find(o => o.id === s.opportunityId)?.rewardEth || '0'), 0n))
   const handleLinkGitHub = () => {
-    if (identity.session?.authenticated) void identity.link()
+    if (identity.githubLinked) void identity.link()
     else document.getElementById('github-signin')?.click()
   }
 
@@ -53,10 +54,10 @@ export default function ContributorsHubPage() {
             </div>
             <div className="cc-card space-y-5">
               <div className="cc-inline text-neutral-400"><GithubIcon className="h-[18px] w-[18px]" /><span className="cc-eyebrow">GitHub identity</span></div>
-              <p className="text-xl font-semibold break-words">{identity.session?.authenticated ? githubUser ? `@${githubUser}` : 'GitHub profile verified' : 'Connect your GitHub'}</p>
+              <p className="text-xl font-semibold break-words">{githubUser ? `@${githubUser}` : 'GitHub link optional'}</p>
               {identity.linked
                 ? <StatusBadge status="Verified"><CheckCircle2 size={13} /> Verified contributor</StatusBadge>
-                : <button onClick={handleLinkGitHub} type="button" className="cc-btn cc-btn-secondary">{identity.session?.authenticated ? 'Verify wallet ownership' : 'Connect GitHub account'} <ArrowRight size={14} /></button>}
+                : <button onClick={handleLinkGitHub} type="button" className="cc-btn cc-btn-secondary">{identity.githubLinked ? 'Link GitHub to wallet' : 'Link GitHub (optional)'} <ArrowRight size={14} /></button>}
             </div>
             <div className="cc-card space-y-5">
               <p className="cc-eyebrow">Confirmed rewards</p>

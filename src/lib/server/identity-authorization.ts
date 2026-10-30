@@ -3,9 +3,9 @@ export function assertProjectPublisher(
   identity: { userId: string; wallet: string },
 ) {
   if (
-    project.publisherUserId !== identity.userId ||
-    project.publisherAddress.toLowerCase() !== identity.wallet.toLowerCase()
+    project.publisherAddress.toLowerCase() !== identity.wallet.toLowerCase() ||
+    (project.publisherUserId !== null && project.publisherUserId !== identity.userId)
   ) {
-    throw new Error('Only the original project owner identity can manage this project')
+    throw new Error('Only the original project owner can manage this project')
   }
 }
