@@ -51,9 +51,6 @@ export async function feed() {
   })
 
   const dbOpps = await db.opportunity.findMany({
-    // A prepared database record is not a funded bounty. Only expose records
-    // whose create-and-fund transaction was indexed from the escrow contract.
-    where: { onChainId: { not: null }, txHash: { not: null } },
     include: { project: true, submissions: true },
     orderBy: { createdAt: 'desc' },
   }).catch(() => [])
@@ -127,6 +124,12 @@ export async function feed() {
   if (configured) {
     try {
       await reconcile()
+    } catch (error) {
+      empty.syncError = error instanceof Error ? error.message : 'MST Testnet sync unavailable'
+    }
+
+    // GitHub PR tracking is independent of escrow RPC availability.
+    try {
       await refreshDuePulls()
       const trackedPulls = await db.verifiedSubmission.findMany({
         where: { id: { in: empty.submissions.map(submission => submission.id) } },
@@ -142,7 +145,7 @@ export async function feed() {
         submission.syncError = tracked.syncError || undefined
       }
     } catch (error) {
-      empty.syncError = error instanceof Error ? error.message : 'MST Testnet sync unavailable'
+      empty.syncError ||= error instanceof Error ? error.message : 'GitHub PR sync unavailable'
     }
 
     // Read on-chain opportunity states for any linked opportunities

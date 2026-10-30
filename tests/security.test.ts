@@ -10,6 +10,7 @@ test('canonical metadata is deterministic and rejects undefined values', () => {
 test('parses exact GitHub repository and PR URLs, rejecting arbitrary fetch targets', () => {
   assert.deepEqual(parseRepo('https://github.com/owner/repo'), {owner: 'owner', repo: 'repo'})
   assert.equal(parsePull('https://github.com/owner/repo/pull/12').number, 12)
+  assert.deepEqual(parsePull('https://github.com/Ved-Malkunaik/StellarPoll/pull/1/changes/35c8e3dc36ee17769a2259abd0c0b075586f3195'), {owner: 'Ved-Malkunaik', repo: 'StellarPoll', number: 1})
   for (const url of ['http://github.com/o/r/pull/1', 'https://github.com.evil.test/o/r/pull/1', 'https://x@github.com/o/r/pull/1', 'https://github.com/o/r/pull/1?x=1', 'https://github.com/o/r/pull/0']) assert.throws(() => parsePull(url))
 })
 test('validates webhook HMAC over the exact raw body with safe malformed input handling', () => {

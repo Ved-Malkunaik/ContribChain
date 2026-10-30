@@ -17,9 +17,11 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
   const now = useNow()
   const oppId = use(params).id
   const { isConnected, address } = useAccount()
-  const opportunity = data.opportunities.find((o) => o.id === oppId)
-  const project = opportunity ? data.projects.find((p) => p.id === opportunity.projectId) : null
-  const submissions = data.submissions.filter((s) => s.opportunityId === oppId)
+  const opportunity = data.opportunities.find((o) => o.id === oppId || (!!o.onChainId && String(o.onChainId) === oppId))
+  const project = opportunity
+    ? data.projects.find((p) => p.id === opportunity.projectId || p.repoId === opportunity.projectId || (!!p.onChainId && String(p.onChainId) === opportunity.projectId))
+    : data.projects.find((p) => p.id === oppId || p.repoId === oppId || (!!p.onChainId && String(p.onChainId) === oppId))
+  const submissions = data.submissions.filter((s) => s.opportunityId === oppId || (opportunity && s.opportunityId === opportunity.id))
   const [prUrl, setPrUrl] = useState('')
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)

@@ -21,7 +21,7 @@ export function parseRepo(input: string) {
   return { owner: match[1], repo: match[2].replace(/\.git$/, '') }
 }
 export function parsePull(input: string) {
-  const match = githubUrl(input).pathname.match(/^\/([A-Za-z0-9-]+)\/([A-Za-z0-9_.-]+)\/pull\/([1-9]\d*)\/?$/)
+  const match = githubUrl(input).pathname.match(/^\/([A-Za-z0-9-]+)\/([A-Za-z0-9_.-]+)\/pull\/([1-9]\d*)(?:\/changes\/[a-f0-9]{7,40})?\/?$/i)
   if (!match || !Number.isSafeInteger(Number(match[3]))) throw new Error('Use https://github.com/owner/repo/pull/123')
   return { owner: match[1], repo: match[2], number: Number(match[3]) }
 }

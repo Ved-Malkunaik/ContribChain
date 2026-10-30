@@ -33,7 +33,7 @@ function NewOpportunityContent({
   const { data } = useFeed()
   const { isConnected, address } = useAccount()
 
-  const project = data.projects.find((p) => p.id === projectId)
+  const project = data.projects.find((p) => p.id === projectId || p.repoId === projectId || (!!p.onChainId && String(p.onChainId) === projectId))
 
   const [formData, setFormData] = useState({
     title: '',

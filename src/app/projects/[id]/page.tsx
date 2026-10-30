@@ -18,8 +18,8 @@ function ProjectContent({ params }: { params: Promise<{ id: string }> }) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  const project = data.projects.find((p) => p.id === projectId)
-  const opportunities = data.opportunities.filter((o) => o.projectId === projectId)
+  const project = data.projects.find((p) => p.id === projectId || p.repoId === projectId || (!!p.onChainId && String(p.onChainId) === projectId))
+  const opportunities = data.opportunities.filter((o) => o.projectId === projectId || (project && o.projectId === project.id))
   const isPublisher = mounted && !!address && !!project && address.toLowerCase() === project.publisherAddress.toLowerCase()
   if (isLoading) return <div className="cc-page"><p className="cc-empty" role="status">Loading project…</p></div>
   if (!project) return <div className="cc-page"><FeedStatus /><EmptyState title="Project not found" description="This project does not exist or has not been synced yet." action={<Link href="/explore" className="cc-btn cc-btn-primary">Return to explore</Link>} /></div>

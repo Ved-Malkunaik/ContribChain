@@ -37,7 +37,7 @@ export function Navbar() {
           aria-label="Home"
         >
           <Image
-            src="/assets/logo.webp"
+            src="/assets/contribChainlogo.webp"
             alt=""
             width="52"
             height="52"

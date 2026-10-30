@@ -12,6 +12,7 @@ export interface Project {
   detailedDescription: string
   category: string
   technologies: string[]
+  repoId?: string
   repoUrl: string
   liveDappUrl: string
   demoVideoUrl?: string
