@@ -4,6 +4,7 @@ import { chainClient, chainConfig, reconcile } from './chain'
 import { db } from './db'
 import { refreshDuePulls } from './github'
 import { demoMode } from './auth'
+import { readFeedCollection } from './feed-read'
 import { parsePull } from '../security'
 import type { Project, Opportunity, Submission } from '@/types'
 
@@ -20,10 +21,10 @@ export async function feed() {
   }
 
   // 1. Fetch persistent database records
-  const dbProjects = await db.project.findMany({
+  const dbProjects = await readFeedCollection('projects', () => db.project.findMany({
     include: { opportunities: true },
     orderBy: { createdAt: 'desc' },
-  }).catch(() => [])
+  }))
 
   const mappedProjects: Project[] = dbProjects.map(p => {
     let techs: string[] = []
@@ -51,10 +52,10 @@ export async function feed() {
     }
   })
 
-  const dbOpps = await db.opportunity.findMany({
+  const dbOpps = await readFeedCollection('opportunities', () => db.opportunity.findMany({
     include: { project: true, submissions: true },
     orderBy: { createdAt: 'desc' },
-  }).catch(() => [])
+  }))
 
   const mappedOpps: Opportunity[] = dbOpps.map(o => {
     let skills: string[] = []
@@ -86,12 +87,12 @@ export async function feed() {
     }
   })
 
-  const dbSubs = await db.submission.findMany({
+  const dbSubs = await readFeedCollection('submissions', () => db.submission.findMany({
     orderBy: { createdAt: 'desc' },
-  }).catch(() => [])
-  const submissionWalletLinks = await db.walletLink.findMany({
+  }))
+  const submissionWalletLinks = await readFeedCollection('wallet links', () => db.walletLink.findMany({
     where: { address: { in: [...new Set(dbSubs.map(submission => submission.contributorAddress.toLowerCase()))] } },
-  }).catch(() => [])
+  }))
 
   const mappedSubs: Submission[] = dbSubs.map(s => ({
     id: s.id,

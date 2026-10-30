@@ -51,7 +51,9 @@ npm run start
 
 `.env.example` describes each field:
 
-- `DATABASE_URL`: persistent SQLite file, relative to the Prisma schema or an absolute file URL. CLI and server must use the same database.
+- `DATABASE_URL`: local SQLite file URL for development. Serverless production uses the shared Turso database below.
+- `TURSO_DATABASE_URL`: server-only Turso URL (`libsql://…`) for Vercel or other multi-instance hosting.
+- `TURSO_AUTH_TOKEN`: server-only database token. Never expose it through a `NEXT_PUBLIC_` variable.
 - `APP_URL`: exact browser/public origin, including port. Set `NEXT_PUBLIC_APP_URL` to the same origin. Choose a stable origin before publishing metadata: on-chain metadata URIs cannot be changed.
 - `AUTH_SECRET`: generate locally using `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` and put the result in `.env`.
 - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`: server-only OAuth credentials from a GitHub OAuth App, or the OAuth Client ID and Client Secret from a GitHub App. For a GitHub App, do not use its numeric App ID or private key for these values.
@@ -132,12 +134,14 @@ Executed locally: **23 contract tests** and **12 application tests** passed. The
 - Dependency audit still reports transitive advisories; critical Auth.js adapter/core exposure was updated. Remaining dependency advisories need review before production. Avoid blind major-version audit fixes to the established stack.
 - Feed caps: 200 metadata snapshots, 500 submission events, 100 history rows. Active requests drive bounded chain catch-up. Production needs pagination/background indexing and broader abuse controls.
 - Recovery requires the original browser's pending intent; if browser storage is lost, chain events remain authoritative but an unbound PR needs manual reconciliation. Direct unverified submissions never receive a false verified label.
-- SQLite must live on persistent writable storage. Use one long-running Node 24 process on a VM with persistent disk, TLS reverse proxy, restricted host headers, protected `.env`/database files and backups. Set DATABASE_URL to that volume and APP_URL to public HTTPS. **Do not use this SQLite configuration on ephemeral serverless hosting.** Multiple instances/serverless require explicit migration to hosted PostgreSQL and shared synchronization state.
+- Local SQLite is for single-instance development only. Vercel/serverless deployments require a shared Turso database: create a Turso database and auth token, set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in the server environment, and redeploy. The app refuses to fall back to per-instance `/tmp` storage. On first connection, it idempotently creates the schema without inserting demo rows. Existing records in an ephemeral `/tmp` database cannot be migrated automatically; re-register projects whose metadata was not preserved and let confirmed on-chain opportunities sync into the shared database.
 - Localhost/temporary-tunnel metadata URLs are not durable decentralized storage. Use a stable public origin before publishing data for others.
 - Standalone `../index.html` template and earlier `../mergeMint` prototype are untouched.
 
 Future work documented only: contract-verifiable GitHub attestations with signer trust, disputes/abandonment and contributor claim/timeout policies, organization GitHub App installs, ERC-20 rewards, multiple winners/milestones, decentralized metadata, reputation/notifications, production database/indexer and independent security review.
 
 ## Official references
+
+[Prisma ORM v6 and Turso](https://www.prisma.io/docs/orm/v6/overview/databases/turso)
 
 [Next route handlers](https://nextjs.org/docs/app/api-reference/file-conventions/route), installed Next 16.4.2 docs under node_modules/next/dist/docs, [OpenZeppelin guard](https://docs.openzeppelin.com/contracts/5.x/api/utils#ReentrancyGuard), [Hardhat 2](https://v2.hardhat.org/), [Auth.js core](https://authjs.dev/reference/core), [GitHub OAuth](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps), [webhook signatures](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries), [Prisma v6 migrations](https://www.prisma.io/docs/orm/v6/prisma-migrate/getting-started), [Cloudflare tunnels](https://developers.cloudflare.com/tunnel/get-started/).

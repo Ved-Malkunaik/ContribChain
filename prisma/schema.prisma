@@ -1,7 +1,8 @@
 // Complete ContribChain Prisma Schema with NextAuth, Snapshots, Chain Indexing, and Webhooks
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  // Runtime clients select a local file or shared libSQL adapter in src/lib/server/db.ts.
+  url      = "file:./dev.db"
 }
 
 generator client {

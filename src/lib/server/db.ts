@@ -1,8 +1,11 @@
 import { PrismaClient } from '@prisma/client'
+import { PrismaLibSQL } from '@prisma/adapter-libsql'
+import { createClient } from '@libsql/client'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { SCHEMA_STATEMENTS } from './schema-sql'
+import { resolveDatabaseConfig } from './database-config'
 
 function getFilePathFromUrl(url: string): string {
   const withoutFile = url.replace(/^file:(?:\/\/)?/, '')
@@ -15,64 +18,81 @@ function getFilePathFromUrl(url: string): string {
   return resolve(process.cwd(), 'prisma', withoutFile)
 }
 
-function ensureDatabaseInitialized() {
-  if (!process.env.DATABASE_URL) {
-    process.env.DATABASE_URL = process.env.VERCEL ? 'file:/tmp/dev.db' : 'file:./dev.db'
+function ensureLocalDatabaseInitialized(url: string) {
+  const dbPath = getFilePathFromUrl(url)
+  const dir = dirname(dbPath)
+  if (!existsSync(/*turbopackIgnore: true*/ dir)) {
+    mkdirSync(dir, { recursive: true })
   }
 
-  const url = process.env.DATABASE_URL
-  if (url.startsWith('file:')) {
+  let needsSchema = !existsSync(/*turbopackIgnore: true*/ dbPath)
+  if (!needsSchema) {
     try {
-      const dbPath = getFilePathFromUrl(url)
-      const dir = dirname(dbPath)
-      if (!existsSync(/*turbopackIgnore: true*/ dir)) {
-        mkdirSync(dir, { recursive: true })
-      }
-
-      let needsSchema = false
-      if (!existsSync(/*turbopackIgnore: true*/ dbPath)) {
-        needsSchema = true
-      } else {
-        try {
-          const checkSqlite = new DatabaseSync(dbPath)
-          const row = checkSqlite
-            .prepare("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name='Checkpoint'")
-            .get() as { count: number } | undefined
-          checkSqlite.close()
-          if (!row || row.count === 0) {
-            needsSchema = true
-          }
-        } catch {
-          needsSchema = true
-        }
-      }
-
-      if (needsSchema) {
-        const sqlite = new DatabaseSync(dbPath)
-        for (const statement of SCHEMA_STATEMENTS) {
-          try {
-            sqlite.exec(statement)
-          } catch (e) {
-            // Index or column might already exist
-          }
-        }
-        sqlite.close()
-      }
-    } catch (err) {
-      console.warn('[db] auto-initialization warning:', err)
+      const checkSqlite = new DatabaseSync(dbPath)
+      const row = checkSqlite
+        .prepare("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name='Checkpoint'")
+        .get() as { count: number } | undefined
+      checkSqlite.close()
+      needsSchema = !row || row.count === 0
+    } catch {
+      needsSchema = true
     }
+  }
+
+  if (!needsSchema) return
+  const sqlite = new DatabaseSync(dbPath)
+  try {
+    for (const statement of SCHEMA_STATEMENTS) {
+      try {
+        sqlite.exec(statement)
+      } catch {
+        // Existing indexes or columns are expected during idempotent local setup.
+      }
+    }
+  } finally {
+    sqlite.close()
   }
 }
 
-ensureDatabaseInitialized()
+async function ensureLibsqlSchema(url: string, authToken: string) {
+  const schemaStatements = SCHEMA_STATEMENTS.filter(statement =>
+    /^\s*(?:CREATE\s+TABLE|CREATE\s+(?:UNIQUE\s+)?INDEX|ALTER\s+TABLE)\b/i.test(statement),
+  )
+  const client = createClient({ url, authToken })
+  try {
+    await client.executeMultiple(`${schemaStatements.join(';\n')};`)
+  } finally {
+    client.close()
+  }
+}
+
+const databaseConfig = resolveDatabaseConfig({
+  VERCEL: process.env.VERCEL,
+  DATABASE_URL: process.env.DATABASE_URL,
+  TURSO_DATABASE_URL: process.env.TURSO_DATABASE_URL,
+  TURSO_AUTH_TOKEN: process.env.TURSO_AUTH_TOKEN,
+})
+if (databaseConfig.kind === 'sqlite') ensureLocalDatabaseInitialized(databaseConfig.url)
 
 const globalDb = globalThis as unknown as { contribchainDb?: PrismaClient }
-export const db =
-  globalDb.contribchainDb ??
-  new PrismaClient({
-    datasourceUrl: process.env.DATABASE_URL,
-    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
-  })
+let client = globalDb.contribchainDb
+if (!client) {
+  client = databaseConfig.kind === 'libsql'
+    ? new PrismaClient({
+        adapter: new PrismaLibSQL({ url: databaseConfig.url, authToken: databaseConfig.authToken }),
+        log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+      })
+    : new PrismaClient({
+        datasourceUrl: databaseConfig.url,
+        log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+      })
+  if (databaseConfig.kind === 'libsql') {
+    await ensureLibsqlSchema(databaseConfig.url, databaseConfig.authToken)
+  }
+  globalDb.contribchainDb = client
+}
+
+export const db = client
 
 if (process.env.NODE_ENV !== 'production') {
   globalDb.contribchainDb = db

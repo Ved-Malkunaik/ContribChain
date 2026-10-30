@@ -9,6 +9,7 @@ import type { VerifiedSubmission } from '@prisma/client'
 import { assertExpectedChain, chainConfig, chainClient, opportunity, contribution as chainContribution, reconcile, ingestTransaction, json } from '@/lib/server/chain'
 import { bountyAbi, contractAddress } from '@/lib/contract'
 import { feed } from '@/lib/server/feed'
+import { FeedReadError } from '@/lib/server/feed-read'
 import { projectInput, opportunityInput, submissionInput } from '@/lib/server/validation'
 import { transactionCalls } from '@/lib/transaction-intent'
 import { assertReleaseRewardEligible } from '@/lib/server/action-eligibility'
@@ -729,6 +730,12 @@ async function handler(request: Request, context: { params: Promise<{ path: stri
   try {
     return await route(request, context)
   } catch (error) {
+    if (error instanceof FeedReadError) {
+      return Response.json(
+        { error: 'Feed data is temporarily unavailable. Please retry shortly.' },
+        { status: 503, headers: { 'cache-control': 'no-store', 'retry-after': '5' } },
+      )
+    }
     const message =
       error instanceof z.ZodError
         ? error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')
