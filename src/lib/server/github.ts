@@ -11,8 +11,10 @@ export async function github(path: string, token?: string | null) {
   if (Date.now() < rateLimitUntil) throw new Error('GitHub rate limit backoff; retry later')
   const accessToken = token || process.env.GITHUB_API_TOKEN
   const response = await fetch('https://api.github.com' + path, { headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(accessToken ? {Authorization: `Bearer ${accessToken}`} : {}) }, cache: 'no-store', signal: AbortSignal.timeout(10000) })
-  if (response.status === 429 || (response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0')) {
-    rateLimitUntil = Math.max(Date.now() + 60000, Number(response.headers.get('x-ratelimit-reset') || 0) * 1000)
+  if (response.status === 429 || (response.status === 403 && (response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after')))) {
+    const now = Date.now()
+    rateLimitUntil = Math.max(now + 60000, Number(response.headers.get('retry-after') || 0) * 1000 + now, Number(response.headers.get('x-ratelimit-reset') || 0) * 1000)
+    throw new Error(`GitHub API rate limit reached; retry after ${new Date(rateLimitUntil).toISOString()}`)
   }
   if (!response.ok) throw new Error(`GitHub API returned ${response.status}. Check access or retry after backoff.`)
   return response.json()
@@ -52,6 +54,7 @@ export async function pull(repoId: string, number: number, token?: string | null
   return pullSchema.parse(await github(`/repositories/${repoId}/pulls/${number}`, token))
 }
 const syncing = new Map<string, Promise<void>>()
+let nextAnonymousPollAt = 0
 export async function syncPull(id: string, force = false, token?: string | null) {
   const existing = syncing.get(id)
   if (existing) return existing
@@ -64,7 +67,7 @@ export async function syncPull(id: string, force = false, token?: string | null)
       if (String(pr.base.repo.id) !== s.repoId || String(pr.user.id) !== s.githubId || pr.base.repo.private) throw new Error('PR repository or author no longer matches the verified identity')
       const mergedAt = pr.merged_at ? new Date(pr.merged_at) : null
       await db.$transaction([
-        db.verifiedSubmission.update({where:{id}, data:{ title: pr.title, login: pr.user.login, prState: pr.merged ? 'merged' : pr.state, commit: pr.head.sha, syncedAt: new Date(), nextSyncAt: new Date(Date.now()+15000), syncError: null }}),
+        db.verifiedSubmission.update({where:{id}, data:{ title: pr.title, login: pr.user.login, prState: pr.merged ? 'merged' : pr.state, commit: pr.head.sha, syncedAt: new Date(), nextSyncAt: new Date(Date.now() + (token || process.env.GITHUB_API_TOKEN ? 15000 : 180000)), syncError: null }}),
         db.submission.updateMany({where:{id}, data:{isMerged:pr.merged, mergedAt, latestCommitSha:pr.head.sha}}),
       ])
     } catch(error) {
@@ -76,6 +79,9 @@ export async function syncPull(id: string, force = false, token?: string | null)
   try { await job } finally { syncing.delete(id) }
 }
 export async function refreshDuePulls() {
-  const due = await db.verifiedSubmission.findMany({where: {chainAddress:contractAddress?.toLowerCase() || '',chainRef: {not: null}, nextSyncAt: {lte: new Date()},NOT:{OR:[{githubId:{startsWith:'demo:'}},{reference:{startsWith:'demo:'}}]}}, take: 10, orderBy: {nextSyncAt:'asc'}})
+  const hasApiToken = Boolean(process.env.GITHUB_API_TOKEN)
+  if (!hasApiToken && Date.now() < nextAnonymousPollAt) return
+  const due = await db.verifiedSubmission.findMany({where: {chainAddress:contractAddress?.toLowerCase() || '',chainRef: {not: null}, nextSyncAt: {lte: new Date()},NOT:{OR:[{githubId:{startsWith:'demo:'}},{reference:{startsWith:'demo:'}}]}}, take: hasApiToken ? 10 : 1, orderBy: {nextSyncAt:'asc'}})
+  if (!hasApiToken && due.length) nextAnonymousPollAt = Date.now() + 90000
   await Promise.allSettled(due.map(s => syncPull(s.id)))
 }

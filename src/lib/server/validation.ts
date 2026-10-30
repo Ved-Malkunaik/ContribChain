@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { parseRepo, parsePull, rewardWei } from '../security'
 const text = z.string().trim().min(1).max(20000)
-const web = z.string().url().refine(x => { const u = new URL(x); return ['https:','http:'].includes(u.protocol) && !u.username && !u.password }, 'Use an HTTP or HTTPS URL without credentials')
+const web = z.string().trim().url().refine(x => { const u = new URL(x); return ['https:','http:'].includes(u.protocol) && !u.username && !u.password }, 'Use an HTTP or HTTPS URL without credentials')
 export const projectInput = z.object({name:text.max(120),shortDescription:text.max(300),detailedDescription:text,category:text.max(80),technologies:text.max(500),repoUrl:web.refine(x => {try {parseRepo(x);return true} catch{return false}}, 'Use a GitHub repository URL'),liveDappUrl:web,demoVideoUrl:z.union([z.literal(''),web]).optional()})
 export const opportunityInput = z.object({projectId:z.string().trim().min(1).max(128),title:text.max(200),taskType:z.enum(['bug','feature','documentation','optimization','security']),description:text,acceptanceCriteria:text,difficulty:z.enum(['beginner','intermediate','advanced']),requiredSkills:text.max(500),rewardEth:z.string().refine(x => {try{rewardWei(x);return true}catch{return false}},'Use positive ETH with at most 18 decimal places'),deadlineDays:z.string().regex(/^\d+$/).refine(x => Number(x)>=1 && Number(x)<=365,'Use 1–365 days'),issueUrl:z.union([z.literal(''),web]).optional()})
 export const submissionInput = z.object({opportunityId:z.string().trim().min(1).max(128),prUrl:web.refine(x=>{try{parsePull(x);return true}catch{return false}},'Use a GitHub PR URL'),notes:z.string().max(5000).default('')})

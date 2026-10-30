@@ -11,7 +11,9 @@ test('parses exact GitHub repository and PR URLs, rejecting arbitrary fetch targ
   assert.deepEqual(parseRepo('https://github.com/owner/repo'), {owner: 'owner', repo: 'repo'})
   assert.equal(parsePull('https://github.com/owner/repo/pull/12').number, 12)
   assert.deepEqual(parsePull('https://github.com/Ved-Malkunaik/StellarPoll/pull/1/changes/35c8e3dc36ee17769a2259abd0c0b075586f3195'), {owner: 'Ved-Malkunaik', repo: 'StellarPoll', number: 1})
-  for (const url of ['http://github.com/o/r/pull/1', 'https://github.com.evil.test/o/r/pull/1', 'https://x@github.com/o/r/pull/1', 'https://github.com/o/r/pull/1?x=1', 'https://github.com/o/r/pull/0']) assert.throws(() => parsePull(url))
+  assert.deepEqual(parsePull(' https://github.com/owner/repo/pull/12/files?diff=split#review '), {owner: 'owner', repo: 'repo', number: 12})
+  assert.equal(parsePull('https://github.com/owner/repo/pull/12/commits').number, 12)
+  for (const url of ['http://github.com/o/r/pull/1', 'https://github.com.evil.test/o/r/pull/1', 'https://x@github.com/o/r/pull/1', 'https://github.com/o/r/pull/0', 'https://github.com/o/r/issues/1', 'https://github.com/o/r/pull/1/random']) assert.throws(() => parsePull(url))
 })
 test('validates webhook HMAC over the exact raw body with safe malformed input handling', () => {
   const body = '{"action":"closed"}'

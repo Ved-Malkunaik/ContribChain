@@ -84,9 +84,9 @@ Set APP_URL and OAuth homepage/callback to the generated HTTPS origin, restart N
 
 Repository Settings → Webhooks → Add webhook: URL **`https://YOUR-HOST/api/webhooks/github`**, `application/json`, secret matching GITHUB_WEBHOOK_SECRET, SSL verification enabled, individual event **Pull requests**.
 
-The endpoint verifies raw-body HMAC SHA-256 using constant-time comparison and deduplicates deliveries. Opened/synchronize/reopened/closed events trigger authoritative REST refreshes. Payload state is not blindly applied, so delayed closed-unmerged events cannot regress a merged PR. Failed refreshes return 503 and remain retryable through redelivery or polling/manual refresh.
+The endpoint verifies raw-body HMAC SHA-256 using constant-time comparison and deduplicates deliveries. Opened/synchronize/reopened/closed events trigger authoritative REST refreshes. Payload state is not blindly applied, so delayed closed-unmerged events cannot regress a merged PR. Failed refreshes return 503 and remain retryable through redelivery or polling/manual refresh. Configure the webhook and `GITHUB_WEBHOOK_SECRET` for prompt merge updates. A server-only `GITHUB_API_TOKEN` enables 15-second polling; without it, anonymous background polling is throttled to protect GitHub's shared public API limit, while manual refresh still checks immediately.
 
-UI refresh is approximately **15 seconds**, with a shared server/database cache, concurrent refresh deduplication, rate-limit backoff and visible stale/error status. This is near-real-time, not an instant guarantee. Payout performs a fresh server check. A GitHub failure cannot produce Reward ready.
+The UI refreshes its feed approximately **15 seconds**, with a shared server/database cache, concurrent refresh deduplication, rate-limit backoff and visible stale/error status. Webhooks or authenticated polling update the cached PR state; anonymous background polling is conservative. This is near-real-time, not an instant guarantee. Payout performs a fresh server check. A GitHub failure cannot produce Reward ready.
 
 ## Manual final demonstration — pending
 

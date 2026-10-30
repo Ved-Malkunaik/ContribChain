@@ -653,7 +653,7 @@ async function route(request: Request, context: { params: Promise<{ path: string
 
   if (action === 'pr/refresh') {
     const id = z.string().parse(body.id)
-    await syncPull(id, false, s.github.access_token)
+    await syncPull(id, true, s.github.access_token)
     return response({ refreshed: true })
   }
 

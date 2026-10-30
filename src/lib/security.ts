@@ -10,9 +10,9 @@ export function canonicalize(value: unknown): string {
   }
   throw new Error('Metadata must contain only JSON values')
 }
-function githubUrl(input: string) {
-  const u = new URL(input)
-  if (u.protocol !== 'https:' || u.hostname !== 'github.com' || u.port || u.username || u.password || u.search || u.hash) throw new Error('Use an exact https://github.com URL')
+function githubUrl(input: string, allowPullViewParams = false) {
+  const u = new URL(input.trim())
+  if (u.protocol !== 'https:' || u.hostname !== 'github.com' || u.port || u.username || u.password || (!allowPullViewParams && (u.search || u.hash))) throw new Error('Use an exact https://github.com URL')
   return u
 }
 export function parseRepo(input: string) {
@@ -21,7 +21,7 @@ export function parseRepo(input: string) {
   return { owner: match[1], repo: match[2].replace(/\.git$/, '') }
 }
 export function parsePull(input: string) {
-  const match = githubUrl(input).pathname.match(/^\/([A-Za-z0-9-]+)\/([A-Za-z0-9_.-]+)\/pull\/([1-9]\d*)(?:\/changes\/[a-f0-9]{7,40})?\/?$/i)
+  const match = githubUrl(input, true).pathname.match(/^\/([A-Za-z0-9-]+)\/([A-Za-z0-9_.-]+)\/pull\/([1-9]\d*)(?:\/(?:files|commits|checks|conversation)|\/changes\/[a-f0-9]{7,40})?\/?$/i)
   if (!match || !Number.isSafeInteger(Number(match[3]))) throw new Error('Use https://github.com/owner/repo/pull/123')
   return { owner: match[1], repo: match[2], number: Number(match[3]) }
 }

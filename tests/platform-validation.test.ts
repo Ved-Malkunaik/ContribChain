@@ -15,4 +15,5 @@ test('off-chain project IDs are accepted when preparing a funded opportunity', (
 test('off-chain opportunity IDs are accepted for PR submissions', () => {
   const input = { opportunityId: 'clxopportunitymetadataid123456', prUrl: 'https://github.com/owner/repo/pull/1' }
   assert.equal(submissionInput.parse(input).opportunityId, input.opportunityId)
+  assert.equal(submissionInput.parse({ ...input, prUrl: '  https://github.com/owner/repo/pull/1/files?diff=split  ' }).prUrl, 'https://github.com/owner/repo/pull/1/files?diff=split')
 })
