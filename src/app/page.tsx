@@ -66,14 +66,13 @@ export default function HomePage() {
             Contribute Code
           </span>
           <span className="block animate-in fade-in slide-in-from-bottom-3 duration-700 delay-300">
-            Earn {currencySymbol}
+            Earn Rewards
           </span>
         </h1>
 
         {/* Subhead */}
         <p className="max-w-md sm:max-w-lg mx-auto text-[#d0d0d0]/80 text-[14px] sm:text-[16px] leading-relaxed mb-8 animate-in fade-in slide-in-from-bottom-3 duration-700 delay-500 font-normal">
-          Discover funded open-source opportunities on MST Blockchain. Submit a pull request and earn
-          {' '}{currencySymbol} bounties after publisher approval, GitHub merge, and on-chain release.
+          CODE . CONTRIBUTE . EARN.
         </p>
 
         {/* CTA Buttons */}

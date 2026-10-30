@@ -129,7 +129,7 @@ export async function feed() {
     'gas-optimized twap hook with dynamic tick intervals',
     'cross-chain state proof verifier with ccip callback',
   ])
-  const mockOppIds = new Set(['opp-1', 'opp-2', 'onchain-opp-2', 'onchain-opp-3'])
+  const mockOppIds = new Set(['opp-1', 'opp-2'])
 
   empty.projects = mappedProjects.filter(p => !mockProjectIds.has(p.id) && !mockProjectNames.has(p.name.toLowerCase().trim()))
   empty.opportunities = mappedOpps.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()))
@@ -211,15 +211,35 @@ export async function feed() {
           existing.deadline = deadlineDate
           existing.state = stateStr
           if (selectedId) existing.selectedSubmissionId = selectedId
+
+          await db.opportunity.updateMany({
+            where: { id: existing.id },
+            data: {
+              onChainId: oppIdNum,
+              state: statusNum === 1 ? 'OPEN' : statusNum === 2 ? 'APPROVED' : statusNum === 3 ? 'PAID' : 'REFUNDED',
+              rewardEth: reward,
+              selectedSubmissionId: selectedId || null,
+            },
+          }).catch(() => {})
         } else {
+          // Check if DB already has this opportunity
+          const dbOpp = await db.opportunity.findFirst({
+            where: {
+              OR: [
+                { onChainId: oppIdNum },
+                { metadataHash: onChainMetadataHash },
+              ],
+            },
+          }).catch(() => null)
+
           const snap = await db.snapshot.findFirst({ where: { hash: onChainMetadataHash } }).catch(() => null)
-          let title = `StellarPoll Feature #${i}`
-          let description = 'Escrow bounty confirmed on MST Testnet'
-          let acceptanceCriteria = 'Complete task criteria and merge PR on GitHub'
-          let difficulty = 'intermediate'
-          let requiredSkills = ['TypeScript', 'Solidity']
-          let taskType = 'feature'
-          let projId = defaultProjectId
+          let title = dbOpp?.title || `StellarPoll Feature #${i}`
+          let description = dbOpp?.description || 'Escrow bounty confirmed on MST Testnet'
+          let acceptanceCriteria = dbOpp?.acceptanceCriteria || 'Complete task criteria and merge PR on GitHub'
+          let difficulty = dbOpp?.difficulty || 'intermediate'
+          let requiredSkills = dbOpp?.requiredSkills ? (() => { try { return JSON.parse(dbOpp.requiredSkills) } catch { return ['TypeScript', 'Solidity'] } })() : ['TypeScript', 'Solidity']
+          let taskType = dbOpp?.taskType || 'feature'
+          let projId = dbOpp?.projectId || defaultProjectId
 
           if (snap) {
             try {
@@ -234,13 +254,10 @@ export async function feed() {
                 projId = meta.projectId
               }
             } catch {}
-          } else {
-            // Do not synthesize placeholder mock opportunities
-            continue
           }
 
           const createdOpp: Opportunity = {
-            id: snap?.id || `onchain-opp-${i}`,
+            id: dbOpp?.id || snap?.id || `onchain-opp-${i}`,
             onChainId: oppIdNum,
             projectId: projId,
             publisherAddress: publisherAddr,
@@ -255,7 +272,7 @@ export async function feed() {
             deadline: deadlineDate,
             state: stateStr,
             selectedSubmissionId: selectedId,
-            createdAt: new Date().toISOString(),
+            createdAt: dbOpp?.createdAt ? dbOpp.createdAt.toISOString() : new Date().toISOString(),
             metadataHash: onChainMetadataHash,
           }
           empty.opportunities.push(createdOpp)
