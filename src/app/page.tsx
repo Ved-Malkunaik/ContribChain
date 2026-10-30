@@ -17,17 +17,26 @@ export default function HomePage() {
 
   return (
     <div className="relative min-h-[calc(100vh-4rem)] flex flex-col justify-between overflow-x-hidden bg-[#000000]">
-      {/* Dynamic Background */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none opacity-40 mix-blend-screen scale-105 transition-transform duration-1000"
-        style={{
-          backgroundImage:
-            "url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop')",
-        }}
-      />
-      <div className="absolute inset-0 bg-radial from-transparent via-[#000000]/60 to-[#000000] pointer-events-none" />
+      {/* Exact Moving Video Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <video
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          autoPlay
+          muted
+          loop
+          playsInline
+        >
+          <source
+            src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260809_012548_ef22562c-c0ae-4816-ad9d-f8922af4e6a7.mp4"
+            type="video/mp4"
+          />
+        </video>
+        {/* Soft radial and ambient overlays for crisp text contrast */}
+        <div className="absolute inset-0 bg-black/45 pointer-events-none" />
+        <div className="absolute inset-0 bg-radial from-transparent via-black/55 to-[#000000] pointer-events-none" />
+      </div>
 
-      {/* Main Content Area */}
+      {/* Main Hero Content Area */}
       <section className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-4 pt-12 sm:pt-20 pb-16 max-w-6xl mx-auto w-full">
         {/* 1. Ecosystem Pill / Network Badge */}
         <div className="flex items-center justify-center mb-8 sm:mb-10 animate-in fade-in slide-in-from-top-2 duration-700">
@@ -64,11 +73,11 @@ export default function HomePage() {
         {/* Subhead */}
         <p className="max-w-md sm:max-w-lg mx-auto text-[#d0d0d0]/80 text-[14px] sm:text-[16px] leading-relaxed mb-8 animate-in fade-in slide-in-from-bottom-3 duration-700 delay-500 font-normal">
           Discover funded open-source opportunities on MST Blockchain. Submit a pull request and earn
-          {currencySymbol} bounties after publisher approval, GitHub merge, and on-chain release.
+          {' '}{currencySymbol} bounties after publisher approval, GitHub merge, and on-chain release.
         </p>
 
-        {/* CTA Button */}
-        <div className="animate-in fade-in zoom-in-95 duration-700 delay-700 flex flex-col sm:flex-row items-center gap-3">
+        {/* CTA Buttons */}
+        <div className="animate-in fade-in zoom-in-95 duration-700 delay-700 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/explore"
             className="inline-block bg-white text-black font-semibold text-xs sm:text-sm px-7 py-3.5 rounded-full shadow-[0_0_0_1px_rgba(255,255,255,0.15),0_0_22px_rgba(255,255,255,0.32),0_0_44px_rgba(255,255,255,0.12)] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.25),0_0_30px_rgba(255,255,255,0.45),0_0_60px_rgba(255,255,255,0.2)] hover:-translate-y-0.5 hover:scale-[1.02] transition-all"
@@ -81,6 +90,13 @@ export default function HomePage() {
           >
             Publish Bounty
           </Link>
+          <a
+            href="#prerequisites"
+            className="inline-flex items-center gap-1.5 bg-white/5 text-white/80 hover:text-white text-xs sm:text-sm px-5 py-3.5 rounded-full border border-white/10 hover:border-white/25 transition-all"
+          >
+            <span>Prerequisites</span>
+            <span className="text-[10px]">↓</span>
+          </a>
         </div>
 
         <div className="w-full max-w-2xl mt-10">
@@ -117,8 +133,159 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4. Escrow Workflow Section */}
-      <section className="relative z-10 w-full py-20 bg-black/85 border-t border-white/10 backdrop-blur-md">
+      {/* 4. Prerequisites Section */}
+      <section id="prerequisites" className="relative z-10 w-full py-20 bg-black/80 border-t border-white/10 backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/15 text-white/70 text-xs font-semibold mb-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Getting Started</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              What you&apos;ll need to use the dApp
+            </h2>
+            <p className="mt-2 text-xs sm:text-sm text-[#8e8e98]">
+              Set up your environment in two quick steps to participate as a contributor or publisher.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            {/* Prerequisite 1: BridgeKey Wallet */}
+            <div className="cc-card relative group p-6 sm:p-7 rounded-2xl bg-gradient-to-b from-[#141417] to-[#0e0e10] border border-white/15 hover:border-white/30 transition-all duration-300">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="w-11 h-11 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-white text-lg">
+                  <i className="fa-solid fa-wallet" />
+                </div>
+                <span className="cc-badge" data-tone="success">
+                  <span /> Required Extension
+                </span>
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">
+                BridgeKey Wallet Chrome Extension
+              </h3>
+              <p className="text-xs sm:text-sm text-[#99999f] leading-relaxed mb-6">
+                Install the official BridgeKey browser extension to authenticate with cryptographic signatures, link your wallet to ContribChain, and send escrow release transactions securely on MST Testnet.
+              </p>
+              <div className="mt-auto pt-3 border-t border-white/10 flex items-center justify-between">
+                <span className="text-[11px] text-[#71717a]">Chrome, Brave &amp; Edge</span>
+                <a
+                  href="https://bridgekey.io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 px-3.5 py-1.5 rounded-full transition-colors"
+                >
+                  <span>Install BridgeKey</span>
+                  <span className="text-[11px]">↗</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Prerequisite 2: Test Faucet */}
+            <div className="cc-card relative group p-6 sm:p-7 rounded-2xl bg-gradient-to-b from-[#141417] to-[#0e0e10] border border-white/15 hover:border-white/30 transition-all duration-300">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="w-11 h-11 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-white text-lg">
+                  <i className="fa-solid fa-faucet-drip" />
+                </div>
+                <span className="cc-badge" data-tone="warning">
+                  <span /> Free Test Tokens
+                </span>
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">
+                Test Faucet in that Wallet
+              </h3>
+              <p className="text-xs sm:text-sm text-[#99999f] leading-relaxed mb-6">
+                Fund your wallet address with free testnet MSTC (tMSTC) tokens via the official MSTScan faucet. Use testnet tokens to fund bounty escrows, interact with smart contracts, and claim development payouts.
+              </p>
+              <div className="mt-auto pt-3 border-t border-white/10 flex items-center justify-between">
+                <span className="text-[11px] text-[#71717a]">MST Testnet · Chain ID 91562037</span>
+                <a
+                  href="https://testnet.mstscan.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 px-3.5 py-1.5 rounded-full transition-colors"
+                >
+                  <span>Claim tMSTC Faucet</span>
+                  <span className="text-[11px]">↗</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Key Features Section */}
+      <section id="features" className="relative z-10 w-full py-20 bg-[#070708]/90 border-t border-white/10 backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/15 text-white/70 text-xs font-semibold mb-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              <span>Core Architecture</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Key Features
+            </h2>
+            <p className="mt-2 text-xs sm:text-sm text-[#8e8e98]">
+              Automating open-source funding with non-custodial smart contracts and real-time GitHub status synchronization.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Feature 1: Smart Contract-Based Bounty Escrow */}
+            <div className="cc-card relative group p-6 rounded-2xl bg-gradient-to-b from-[#121214] to-[#0c0c0e] border border-white/15 hover:border-white/30 transition-all duration-300">
+              <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center font-bold text-white text-xs mb-4">
+                01
+              </div>
+              <h3 className="text-base font-semibold text-white mb-2">
+                Smart Contract-Based Bounty Escrow
+              </h3>
+              <p className="text-xs sm:text-sm text-[#99999f] leading-relaxed mb-5">
+                Rewards are funded in advance and held securely by the Solidity smart contract on MST Testnet until the publisher authorizes payment. Contributor payouts are guaranteed and tamper-proof.
+              </p>
+              <div className="mt-auto pt-3 border-t border-white/10 text-[11px] text-[#71717a] flex items-center gap-1.5">
+                <i className="fa-solid fa-lock text-[10px] text-white/60" />
+                <span>Non-custodial smart contract escrow</span>
+              </div>
+            </div>
+
+            {/* Feature 2: Real-time identification of GitHub PR */}
+            <div className="cc-card relative group p-6 rounded-2xl bg-gradient-to-b from-[#121214] to-[#0c0c0e] border border-white/15 hover:border-white/30 transition-all duration-300">
+              <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center font-bold text-white text-xs mb-4">
+                02
+              </div>
+              <h3 className="text-base font-semibold text-white mb-2">
+                Real-time identification of GitHub PR
+              </h3>
+              <p className="text-xs sm:text-sm text-[#99999f] leading-relaxed mb-5">
+                Integrates the GitHub REST API and event webhooks to track pull request lifecycle, commits, approvals, and merged status in real time, automatically updating progress on ContribChain.
+              </p>
+              <div className="mt-auto pt-3 border-t border-white/10 text-[11px] text-[#71717a] flex items-center gap-1.5">
+                <i className="fa-solid fa-code-pull-request text-[10px] text-white/60" />
+                <span>Instant status sync via GitHub API</span>
+              </div>
+            </div>
+
+            {/* Feature 3: GitHub-Integrated Contribution Marketplace */}
+            <div className="cc-card relative group p-6 rounded-2xl bg-gradient-to-b from-[#121214] to-[#0c0c0e] border border-white/15 hover:border-white/30 transition-all duration-300">
+              <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center font-bold text-white text-xs mb-4">
+                03
+              </div>
+              <h3 className="text-base font-semibold text-white mb-2">
+                GitHub-Integrated Contribution Marketplace
+              </h3>
+              <p className="text-xs sm:text-sm text-[#99999f] leading-relaxed mb-5">
+                Organizations publish verified open-source projects, list specific bugs or feature improvements, and attach fixed token rewards for transparent, permissionless global developer participation.
+              </p>
+              <div className="mt-auto pt-3 border-t border-white/10 text-[11px] text-[#71717a] flex items-center gap-1.5">
+                <i className="fa-brands fa-github text-[10px] text-white/60" />
+                <span>Direct repository issue &amp; PR binding</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. Escrow Workflow Section */}
+      <section id="workflow" className="relative z-10 w-full py-20 bg-black/85 border-t border-white/10 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/15 text-white/70 text-xs font-semibold mb-3">
@@ -148,7 +315,7 @@ export default function HomePage() {
               <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/15 text-white/70 flex items-center justify-center font-bold text-xs mb-3">
                 02
               </div>
-              <h3 className="text-sm font-semibold text-white mb-1.5">Contribute & Link PR</h3>
+              <h3 className="text-sm font-semibold text-white mb-1.5">Contribute &amp; Link PR</h3>
               <p className="text-xs text-[#8e8e98] leading-relaxed">
                 Contributor connects BridgeKey wallet, creates a pull request, and submits its reference on-chain.
               </p>
@@ -158,7 +325,7 @@ export default function HomePage() {
               <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/15 text-white/70 flex items-center justify-center font-bold text-xs mb-3">
                 03
               </div>
-              <h3 className="text-sm font-semibold text-white mb-1.5">Review & Approve</h3>
+              <h3 className="text-sm font-semibold text-white mb-1.5">Review &amp; Approve</h3>
               <p className="text-xs text-[#8e8e98] leading-relaxed">
                 Publisher reviews submissions and approves the winning contribution on-chain, reserving the escrow.
               </p>
@@ -168,7 +335,7 @@ export default function HomePage() {
               <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/15 text-white/70 flex items-center justify-center font-bold text-xs mb-3">
                 04
               </div>
-              <h3 className="text-sm font-semibold text-white mb-1.5">Merge & Release</h3>
+              <h3 className="text-sm font-semibold text-white mb-1.5">Merge &amp; Release</h3>
               <p className="text-xs text-[#8e8e98] leading-relaxed">
                 After the PR is merged on GitHub, publisher executes <code className="text-white">releaseReward</code> to transfer {currencySymbol} directly to the winner.
               </p>
