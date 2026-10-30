@@ -60,6 +60,9 @@ export function authConfig(): AuthConfig {
       GitHub({
         clientId,
         clientSecret,
+        // Keep OAuth callbacks on the canonical origin so Vercel preview or
+        // alternate hostnames use the callback registered on the GitHub App.
+        redirectProxyUrl: `${appOrigin()}/api/auth`,
         authorization: { params: { scope: 'read:user', prompt: 'select_account' } },
         checks: ['state', 'pkce'],
         profile(profile) {
