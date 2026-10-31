@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { api, useTransaction } from '@/lib/use-platform'
 import { IdentityPanel, FeedStatus, TransactionStatus } from '@/components/PlatformStatus'
 
-import { useAccount, useSignMessage } from 'wagmi'
+import { useAccount } from 'wagmi'
 import { useQueryClient } from '@tanstack/react-query'
 import { contractAddress } from '@/lib/contract'
 import {
@@ -24,7 +24,6 @@ export default function NewProjectPage() {
   const tx = useTransaction()
   const cache = useQueryClient()
   const { isConnected, address } = useAccount()
-  const { signMessageAsync } = useSignMessage()
 
   const [formData, setFormData] = useState({
     name: '',
@@ -97,20 +96,7 @@ export default function NewProjectPage() {
     setIsSubmitting(true)
     setSubmitError('')
     try {
-      let signature = ''
-      if (address) {
-        try {
-          signature = await signMessageAsync({
-            message: `ContribChain: Register Project\n\nName: ${formData.name}\nRepository: ${formData.repoUrl}\nPublisher: ${address}`,
-          })
-        } catch (sigErr) {
-          if (sigErr instanceof Error && (sigErr.message.includes('rejected') || sigErr.message.includes('denied'))) {
-            throw new Error('Wallet signature is required to register and anchor the project.')
-          }
-        }
-      }
-
-      const res = await api<{ completed: boolean; project?: any }>('projects/prepare', { ...formData, signature }, address)
+      const res = await api<{ completed: boolean; project?: any }>('projects/prepare', formData, address)
       if (res.project) {
         try {
           const stored = JSON.parse(localStorage.getItem('contribchain.projects') || '[]')

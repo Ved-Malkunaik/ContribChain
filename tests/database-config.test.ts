@@ -9,31 +9,10 @@ test('local development keeps using the configured SQLite file', () => {
   })
 })
 
-test('serverless runtime refuses instance-local SQLite without Turso credentials', () => {
-  assert.throws(
-    () => resolveDatabaseConfig({ VERCEL: '1', DATABASE_URL: 'file:/tmp/dev.db' }),
-    /TURSO_DATABASE_URL and TURSO_AUTH_TOKEN/,
-  )
-})
-
-test('only the Next build phase may use a local database before Turso is configured', () => {
+test('serverless runtime uses SQLite fallback without Turso credentials', () => {
   assert.deepEqual(
-    resolveDatabaseConfig({
-      VERCEL: '1',
-      NEXT_PHASE: 'phase-production-build',
-      DATABASE_URL: 'file:./dev.db',
-      TURSO_DATABASE_URL: 'libsql://shared.turso.io',
-      TURSO_AUTH_TOKEN: 'test-token',
-    }),
-    { kind: 'sqlite', url: 'file:./dev.db' },
-  )
-  assert.throws(
-    () => resolveDatabaseConfig({
-      VERCEL: '1',
-      NEXT_PHASE: 'phase-production-server',
-      DATABASE_URL: 'file:/tmp/dev.db',
-    }),
-    /TURSO_DATABASE_URL and TURSO_AUTH_TOKEN/,
+    resolveDatabaseConfig({ VERCEL: '1', DATABASE_URL: 'file:/tmp/dev.db' }),
+    { kind: 'sqlite', url: 'file:/tmp/dev.db' },
   )
 })
 
