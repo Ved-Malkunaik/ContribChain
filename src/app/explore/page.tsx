@@ -20,7 +20,7 @@ export default function ExplorePage() {
       try {
         const parsed = JSON.parse(val)
         if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String)
-      } catch {}
+      } catch { }
       return val.split(',').map((s) => s.trim()).filter(Boolean)
     }
     return []
@@ -81,7 +81,7 @@ export default function ExplorePage() {
             <div className="mt-auto border-t border-white/10 pt-6">
               <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
                 <div><p className="mb-1 text-xs text-neutral-500">Available escrow</p><p className="text-2xl font-medium tracking-tight text-white">{totalBounty} <span className="text-sm text-neutral-500">{currencySymbol}</span></p></div>
-                <span className="inline-flex items-center gap-2 text-xs text-neutral-400"><FolderGit2 size={15} />{projectOpps.length} {projectOpps.length===1?'opportunity':'opportunities'}</span>
+                <span className="inline-flex items-center gap-2 text-xs text-neutral-400"><FolderGit2 size={15} />{projectOpps.length} {projectOpps.length === 1 ? 'opportunity' : 'opportunities'}</span>
               </div>
               <Link href={`/projects/${project.id}`} className="cc-btn cc-btn-secondary w-full !justify-between">Explore project <ArrowRight size={16} /></Link>
             </div>

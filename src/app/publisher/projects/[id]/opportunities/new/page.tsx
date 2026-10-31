@@ -104,7 +104,25 @@ function NewOpportunityContent({
     if (!validate()) return
     setIsSubmitting(true)
     try {
-      const hashResult = await tx.send('opportunities/prepare', { ...formData, projectId })
+      const projectPayload = project ? {
+        id: project.id,
+        name: project.name,
+        shortDescription: project.shortDescription,
+        detailedDescription: project.detailedDescription,
+        category: project.category,
+        technologies: Array.isArray(project.technologies) ? project.technologies.join(', ') : project.technologies,
+        repoId: project.repoId,
+        repoUrl: project.repoUrl,
+        liveDappUrl: project.liveDappUrl,
+        demoVideoUrl: project.demoVideoUrl,
+        publisherAddress: project.publisherAddress,
+      } : undefined
+
+      const hashResult = await tx.send('opportunities/prepare', {
+        ...formData,
+        projectId,
+        project: projectPayload,
+      })
       if (hashResult) {
         setCreatedTxHash(hashResult)
       }

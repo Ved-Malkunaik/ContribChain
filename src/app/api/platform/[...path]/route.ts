@@ -345,17 +345,135 @@ async function route(request: Request, context: { params: Promise<{ path: string
     })
   }
 
+  if (action === 'projects/sync') {
+    const syncProjects = Array.isArray((body as any)?.projects) ? (body as any).projects : []
+    for (const p of syncProjects) {
+      if (!p || !p.id || !p.name) continue
+      try {
+        const pId = String(p.id)
+        const repoId = String(p.repoId || Math.abs(createHash('sha256').update(String(p.repoUrl || pId)).digest().readInt32BE(0)) || 100000001)
+        const rawTechs = p.technologies
+        const techs = Array.isArray(rawTechs)
+          ? rawTechs
+          : typeof rawTechs === 'string'
+          ? rawTechs.split(',').map((x: string) => x.trim()).filter(Boolean)
+          : []
+        const uri = `${appOrigin()}/api/platform/metadata/${pId}`
+        const hash = keccak256(toHex(canonicalize({ ...p, id: pId })))
+        await db.project.upsert({
+          where: { id: pId },
+          create: {
+            id: pId,
+            publisherUserId: profileUserId,
+            publisherAddress: (p.publisherAddress || wallet).toLowerCase(),
+            name: p.name,
+            shortDescription: p.shortDescription || '',
+            detailedDescription: p.detailedDescription || '',
+            category: p.category || 'DeFi',
+            technologies: JSON.stringify(techs),
+            repoId,
+            repoUrl: p.repoUrl || 'https://github.com',
+            liveDappUrl: p.liveDappUrl || 'https://contrib-chain.vercel.app',
+            demoVideoUrl: p.demoVideoUrl || null,
+            metadataURI: uri,
+            metadataHash: hash,
+          },
+          update: {
+            publisherAddress: (p.publisherAddress || wallet).toLowerCase(),
+          },
+        })
+      } catch (err) {
+        console.warn('[projects/sync] Upsert notice:', err)
+      }
+    }
+    return response({ synced: true })
+  }
+
   // Create Opportunity: Atomic on-chain funding into ContribChainEscrow on MST Testnet
   if (action === 'opportunities/prepare') {
     chainConfig()
     await assertExpectedChain()
     const input = opportunityInput.parse(body)
-    const project = await db.project.findFirst({
+    let project = await db.project.findFirst({
       where: {
         OR: [{ id: input.projectId }, { repoId: input.projectId }],
-        publisherAddress: wallet,
       },
     })
+
+    if (!project) {
+      const pData = (body as any)?.project || (body as any)?.projectData
+      if (pData) {
+        const repoId = String(pData.repoId || Math.abs(createHash('sha256').update(String(pData.repoUrl || input.projectId)).digest().readInt32BE(0)) || 100000001)
+        const pId = input.projectId || pData.id || randomUUID()
+        const rawTechs = pData.technologies
+        const techs = Array.isArray(rawTechs)
+          ? rawTechs
+          : typeof rawTechs === 'string'
+          ? rawTechs.split(',').map((x: string) => x.trim()).filter(Boolean)
+          : []
+        const uri = `${appOrigin()}/api/platform/metadata/${pId}`
+        const hash = keccak256(toHex(canonicalize({ ...pData, id: pId })))
+
+        try {
+          project = await db.project.upsert({
+            where: { id: pId },
+            create: {
+              id: pId,
+              publisherUserId: profileUserId,
+              publisherAddress: (pData.publisherAddress || wallet).toLowerCase(),
+              name: pData.name || 'Project',
+              shortDescription: pData.shortDescription || '',
+              detailedDescription: pData.detailedDescription || '',
+              category: pData.category || 'DeFi',
+              technologies: JSON.stringify(techs),
+              repoId,
+              repoUrl: pData.repoUrl || 'https://github.com',
+              liveDappUrl: pData.liveDappUrl || 'https://contrib-chain.vercel.app',
+              demoVideoUrl: pData.demoVideoUrl || null,
+              metadataURI: uri,
+              metadataHash: hash,
+            },
+            update: {
+              publisherAddress: (pData.publisherAddress || wallet).toLowerCase(),
+            },
+          })
+        } catch (restoreErr) {
+          console.warn('[opportunities/prepare] Failed to restore project in DB:', restoreErr)
+        }
+      }
+    }
+
+    if (!project) {
+      const snap = await db.snapshot.findFirst({
+        where: { OR: [{ id: input.projectId }, { repoId: input.projectId }] },
+      })
+      if (snap) {
+        try {
+          const meta = JSON.parse(snap.canonical)
+          project = await db.project.create({
+            data: {
+              id: snap.id,
+              publisherUserId: profileUserId,
+              publisherAddress: snap.owner.toLowerCase(),
+              name: meta.name || 'Project',
+              shortDescription: meta.shortDescription || '',
+              detailedDescription: meta.detailedDescription || '',
+              category: meta.category || 'DeFi',
+              technologies: JSON.stringify(meta.technologies || []),
+              repoId: snap.repoId || '100000001',
+              repoUrl: meta.repoUrl || 'https://github.com',
+              liveDappUrl: meta.liveDappUrl || 'https://contrib-chain.vercel.app',
+              demoVideoUrl: meta.demoVideoUrl || null,
+              metadataURI: snap.uri,
+              metadataHash: snap.hash,
+            },
+          })
+        } catch (snapErr) {
+          console.warn('[opportunities/prepare] Failed to restore from snapshot:', snapErr)
+        }
+      }
+    }
+
     if (!project) throw new Error('Project not found')
     assertProjectPublisher(project, { userId: s.userId, wallet })
 

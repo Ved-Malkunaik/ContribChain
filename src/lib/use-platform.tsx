@@ -102,6 +102,13 @@ export function useFeed() {
         }
       }
 
+      if (localProjects.length > 0) {
+        const missing = localProjects.filter((lp) => !serverProjectIds.has(lp.id))
+        if (missing.length > 0) {
+          void api('projects/sync', { projects: missing }).catch(() => {})
+        }
+      }
+
       const serverOppIds = new Set(serverFeed.opportunities.map((o) => o.id))
       const mergedOpps: Opportunity[] = serverFeed.opportunities.map(sanitizeOpportunity)
 
