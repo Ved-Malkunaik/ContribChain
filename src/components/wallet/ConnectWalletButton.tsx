@@ -153,7 +153,7 @@ export function ConnectWalletButton() {
                   <div>
                     <p className="font-semibold mb-1">No Web3 Wallet Detected</p>
                     <p className="text-neutral-300 mb-2">
-                      Please install the BridgeKey extension or MetaMask to interact with ContribChain escrow on MST Testnet.
+                      Please install the BridgeKey extension or MetaMask to interact with ContribChain escrow on {networkName}.
                     </p>
                     <a
                       href="https://bridgekey.io"

@@ -1,5 +1,5 @@
 import { decodeEventLog, createPublicClient, http, keccak256, toHex, type Hash, type Address } from 'viem'
-import { activeChain, bountyAbi, contractAddress, deploymentBlock, networkName } from '../contract'
+import { activeChain, bountyAbi, contractAddress, deploymentBlock, networkName, getActiveRpcUrl } from '../contract'
 import { db } from './db'
 import { rewardWei } from '../security'
 import { z } from 'zod'
@@ -8,13 +8,7 @@ export const json = (value: unknown) => JSON.stringify(value, (_, v) => typeof v
 
 export const chainClient = createPublicClient({
   chain: activeChain,
-  transport: http(
-    process.env.MSTC_RPC_URL ||
-    process.env.NEXT_PUBLIC_MSTC_RPC_URL ||
-    process.env.MST_RPC_URL ||
-    process.env.NEXT_PUBLIC_MST_RPC_URL ||
-    'https://mariorpc.mstblockchain.com/'
-  ),
+  transport: http(getActiveRpcUrl()),
 })
 
 export function chainConfig(): Address {

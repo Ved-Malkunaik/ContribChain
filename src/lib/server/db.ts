@@ -108,7 +108,13 @@ async function ensureLibsqlSchema(url: string, authToken: string) {
   )
   const client = createClient({ url, authToken })
   try {
-    await client.executeMultiple(`${schemaStatements.join(';\n')};`)
+    for (const statement of schemaStatements) {
+      try {
+        await client.execute(statement)
+      } catch {
+        // Table or index already exists
+      }
+    }
   } catch (err) {
     console.warn('[db] libsql schema notice:', err)
   } finally {
@@ -152,6 +158,8 @@ if (!client) {
 export async function ensureDatabaseReady() {
   if (databaseConfig.kind === 'sqlite') {
     await ensureSqliteSchema(client)
+  } else if (databaseConfig.kind === 'libsql') {
+    await ensureLibsqlSchema(databaseConfig.url, databaseConfig.authToken)
   }
 }
 

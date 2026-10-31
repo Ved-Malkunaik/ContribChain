@@ -62,7 +62,7 @@ export default function ContributorsHubPage() {
             <div className="cc-card space-y-5">
               <p className="cc-eyebrow">Confirmed rewards</p>
               <p className="text-4xl font-semibold tracking-tight">{earnedRewardsEth} <span className="text-base font-normal text-neutral-500">{currencySymbol}</span></p>
-              <p className="text-xs leading-relaxed text-neutral-500">{paidSubmissions.length} confirmed {paidSubmissions.length === 1 ? 'payout' : 'payouts'} on MST Testnet. Only released rewards count toward this balance.</p>
+              <p className="text-xs leading-relaxed text-neutral-500">{paidSubmissions.length} confirmed {paidSubmissions.length === 1 ? 'payout' : 'payouts'} on {networkName}. Only released rewards count toward this balance.</p>
             </div>
           </div>
 

@@ -19,7 +19,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react'
-import { currencySymbol, explorerUrl } from '@/lib/contract'
+import { currencySymbol, explorerUrl, networkName } from '@/lib/contract'
 
 function NewOpportunityContent({
   params,
@@ -111,20 +111,20 @@ function NewOpportunityContent({
       <PageHeader
         eyebrow="Publisher / New opportunity"
         title="Make the next move."
-        description="Define a meaningful task, set a fair reward in tMSTC and give your next contributor everything they need to begin."
+        description="Define a meaningful task, set a fair reward in {currencySymbol} and give your next contributor everything they need to begin."
       />
       <IdentityPanel />
       <FeedStatus />
       <TransactionStatus tx={tx} />
       <div className="cc-inline mb-6">
         <span className="cc-badge">{project?.name || 'Selected project'}</span>
-        <span className="cc-badge">MST Testnet</span>
+        <span className="cc-badge">{networkName}</span>
       </div>
       {mounted && !isConnected && (
         <div className="cc-panel mb-6 flex items-start gap-3 text-sm text-neutral-400">
           <AlertCircle size={18} className="shrink-0 text-amber-300" />
           <p>
-            <span className="font-medium text-white">Connect your BridgeKey wallet.</span> You’ll confirm the bounty deposit in your wallet before the opportunity is funded on MST Testnet.
+            <span className="font-medium text-white">Connect your BridgeKey wallet.</span> You’ll confirm the bounty deposit in your wallet before the opportunity is funded on {networkName}.
           </p>
         </div>
       )}
@@ -156,7 +156,7 @@ function NewOpportunityContent({
           <div>
             <h2 className="text-2xl font-bold text-white mb-2">Opportunity Live & Escrow Funded!</h2>
             <p className="text-sm text-neutral-400 max-w-md mx-auto">
-              Your bounty of <strong className="text-white font-mono">{formData.rewardEth} {currencySymbol}</strong> is safely locked on-chain in the ContribChainEscrow contract on MST Testnet.
+              Your bounty of <strong className="text-white font-mono">{formData.rewardEth} {currencySymbol}</strong> is safely locked on-chain in the ContribChainEscrow contract on {networkName}.
             </p>
           </div>
 
@@ -165,7 +165,7 @@ function NewOpportunityContent({
             <div className="flex items-center justify-between text-xs text-neutral-400">
               <span className="font-medium text-white flex items-center gap-1.5">
                 <ShieldCheck size={14} className="text-emerald-400" />
-                MST Testnet Transaction Receipt
+                {networkName} Transaction Receipt
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
                 Confirmed on-chain
@@ -175,7 +175,7 @@ function NewOpportunityContent({
             <div>
               <p className="text-[11px] text-neutral-500 mb-1">Transaction Hash</p>
               <p className="font-mono text-xs text-neutral-200 break-all bg-white/[0.03] p-2.5 rounded-xl border border-white/5 select-all">
-                {tx.hash || 'Transaction confirmed on MST Testnet'}
+                {tx.hash || `Transaction confirmed on ${networkName}`}
               </p>
             </div>
 
@@ -405,14 +405,14 @@ function NewOpportunityContent({
                 </div>
               </div>
               <p className="border-t border-white/10 pt-4 text-xs leading-relaxed text-neutral-500">
-                Approving a winner reserves the reward for that contributor. {data.demoMode ? 'After simulating the demo PR merge, confirm the real MST Testnet payout in your wallet.' : 'After their PR is merged, confirm the payout in your wallet.'} Once a winner is approved, the reward cannot be refunded.
+                Approving a winner reserves the reward for that contributor. {data.demoMode ? 'After simulating the demo PR merge, confirm the real {networkName} payout in your wallet.' : 'After their PR is merged, confirm the payout in your wallet.'} Once a winner is approved, the reward cannot be refunded.
               </p>
             </div>
           </section>
 
           <div className="flex flex-wrap items-center justify-between gap-5 border-t border-white/10 pt-6">
             <p className="max-w-sm text-xs leading-relaxed text-neutral-500">
-              Confirming in your wallet transfers the bounty into real {currencySymbol} escrow on MST Testnet.
+              Confirming in your wallet transfers the bounty into real {currencySymbol} escrow on {networkName}.
             </p>
             <div className="cc-inline">
               <Link href={'/projects/' + projectId} className="cc-btn cc-btn-secondary">

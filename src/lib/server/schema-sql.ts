@@ -224,8 +224,5 @@ export const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS "Submission_opportunityId_status_idx" ON "Submission"("opportunityId", "status")`,
   `CREATE INDEX IF NOT EXISTS "Submission_contributorAddress_idx" ON "Submission"("contributorAddress")`,
   `CREATE INDEX IF NOT EXISTS "Submission_contributorUserId_idx" ON "Submission"("contributorUserId")`,
-  `INSERT OR IGNORE INTO "Project" ("id", "onChainId", "publisherAddress", "name", "shortDescription", "detailedDescription", "category", "technologies", "repoId", "repoUrl", "liveDappUrl", "demoVideoUrl", "metadataURI", "metadataHash", "txHash", "createdAt", "updatedAt")
-   VALUES
-   ('a20e3399-e403-4c28-8699-6987885a6b47', NULL, '0x6b4b1b7640ed0542a5d00a774994b04478deecfc', 'StellarPoll', 'Live Poll - One-question poll with real-time results', 'Live Poll - One-question poll with real-time results', 'DeFi', '["TypeScript","JavaScript","Rust","CSS"]', '1163272907', 'https://github.com/Ved-Malkunaik/StellarPoll', 'https://stellar-poll-ochre.vercel.app', NULL, 'app://metadata/project/stellar-poll', '0x9a92fd21ecaf270b272da26ccad0ff09df5da245b0140c197df504f1c7f6b43a', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 ]
 

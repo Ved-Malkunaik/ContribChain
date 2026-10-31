@@ -8,7 +8,7 @@ import { IdentityPanel, FeedStatus, TransactionStatus } from '@/components/Platf
 
 import { useAccount } from 'wagmi'
 import { useQueryClient } from '@tanstack/react-query'
-import { contractAddress } from '@/lib/contract'
+import { contractAddress, networkName } from '@/lib/contract'
 import {
   ArrowLeft,
   Globe,
@@ -119,7 +119,7 @@ export default function NewProjectPage() {
       <PageHeader eyebrow="Publisher / New project" title="Build something open." description="Give your project a home on ContribChain. Share what you’re building, then invite contributors to move it forward." />
       <IdentityPanel /><FeedStatus /><TransactionStatus tx={tx} />
 
-      {mounted && !isConnected && <div className="cc-panel mb-6 flex items-start gap-3 text-sm text-neutral-400"><AlertCircle size={18} className="shrink-0 text-amber-300" /><p><span className="font-medium text-white">Connect your wallet.</span> Use the navigation to connect BridgeKey or your wallet and anchor the project to your publisher address on MST Testnet.</p></div>}
+      {mounted && !isConnected && <div className="cc-panel mb-6 flex items-start gap-3 text-sm text-neutral-400"><AlertCircle size={18} className="shrink-0 text-amber-300" /><p><span className="font-medium text-white">Connect your wallet.</span> Use the navigation to connect BridgeKey or your wallet and anchor the project to your publisher address on {networkName}.</p></div>}
 
       {registered ? (
         <div className="cc-panel py-12 text-center space-y-4" role="status"><CheckCircle2 className="mx-auto text-emerald-300" size={40} /><h2 className="text-2xl font-semibold">Your project is registered.</h2><p className="text-sm text-neutral-400">Returning to your publisher hub. You’re ready to create your first funded opportunity.</p><Link href="/publisher" className="cc-btn cc-btn-primary">Go to publisher hub</Link></div>
