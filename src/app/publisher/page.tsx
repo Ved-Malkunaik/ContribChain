@@ -11,7 +11,7 @@ import { PublisherActions } from '@/components/PublisherActions'
 import { EmptyState, PageHeader, StatusBadge } from '@/components/ui/AppUI'
 import { getSubmissionPresentation } from '@/lib/submission-presentation'
 import { useFeed, useIdentity, useTransaction, useNow } from '@/lib/use-platform'
-import { explorerUrl, currencySymbol } from '@/lib/contract'
+import { explorerUrl, currencySymbol, networkName } from '@/lib/contract'
 
 type HubTab = 'projects' | 'submissions' | 'rewards' | 'refunds'
 
@@ -66,7 +66,7 @@ export default function PublisherHubPage() {
       {!mounted || !isConnected || !address ? (
         <EmptyState
           title="Your workspace starts with your wallet."
-          description="Connect your BridgeKey or injected wallet from the navigation to see your projects, review contributions and manage MST Testnet escrow."
+          description="Connect your BridgeKey or injected wallet from the navigation to see your projects, review contributions and manage {networkName} escrow."
           action={
             <span className="cc-badge">
               <Wallet size={14} /> Wallet connection required
@@ -87,7 +87,7 @@ export default function PublisherHubPage() {
             <div className="cc-stat">
               <p>Locked in escrow</p>
               <strong>{totalEscrow}</strong>
-              <small>{currencySymbol} (MST TESTNET)</small>
+              <small>{currencySymbol} ({networkName.toUpperCase()})</small>
             </div>
             <div className="cc-stat">
               <p>Awaiting review</p>
@@ -205,7 +205,7 @@ export default function PublisherHubPage() {
                       {presentation.status === 'Paid' ? (
                         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.04] p-5 space-y-3">
                           <p className="flex items-center gap-2 font-semibold text-emerald-300">
-                            <CheckCircle2 size={18} /> Reward paid · confirmed on MST Testnet
+                            <CheckCircle2 size={18} /> Reward paid · confirmed on {networkName}
                           </p>
                           <p className="text-3xl font-semibold tracking-tight">
                             {presentation.rewardEth ?? '—'} <span className="text-base font-normal text-neutral-400">{currencySymbol}</span>
@@ -220,7 +220,7 @@ export default function PublisherHubPage() {
                           ) : (
                             <p className="text-xs text-neutral-400">Confirmed payout. Transaction receipt is synchronizing.</p>
                           )}
-                          {submission.demo && <p className="text-xs text-amber-300">The PR was simulated; this payout transferred real {currencySymbol} on MST Testnet.</p>}
+                          {submission.demo && <p className="text-xs text-amber-300">The PR was simulated; this payout transferred real {currencySymbol} on {networkName}.</p>}
                         </div>
                       ) : (
                         <SubmissionProgress submission={submission} opportunity={opportunity} />
@@ -312,7 +312,7 @@ export default function PublisherHubPage() {
                   <ExternalLink size={13} />
                 </a>
               ))}
-              {history.length === 0 && <p className="text-xs">Confirmed transactions from this wallet on MST Testnet will appear here.</p>}
+              {history.length === 0 && <p className="text-xs">Confirmed transactions from this wallet on {networkName} will appear here.</p>}
             </div>
           </details>
         </>

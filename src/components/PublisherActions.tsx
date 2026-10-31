@@ -7,7 +7,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowUpRight, CheckCircle2, LockKeyhole, RotateCw } from 'lucide-react'
 import { EmptyState, StatusBadge } from '@/components/ui/AppUI'
-import { explorerUrl, currencySymbol } from '@/lib/contract'
+import { explorerUrl, currencySymbol, networkName } from '@/lib/contract'
 
 export function PublisherActions({
   mode,
@@ -115,7 +115,7 @@ export function PublisherActions({
         const ready = !!sub && isMerged && (sub.status === 'Approved' || o.state === 'Approved')
         const reason = demo
           ? ready
-            ? 'Demo merge complete. Confirm the MST Testnet payout to release escrow.'
+            ? `Demo merge complete. Confirm the ${networkName} payout to release escrow.`
             : 'Winner approved. Simulate the demo PR merge, then confirm payment.'
           : !sub
           ? 'Select and approve a contribution before releasing the reward.'
@@ -142,7 +142,7 @@ export function PublisherActions({
             <div className="flex flex-wrap items-end justify-between gap-5">
               <div>
                 <span className="font-display text-4xl">{o.rewardEth}</span>
-                <span className="text-xs text-[#7e7e88] ml-2">{currencySymbol} (MST Testnet)</span>
+                <span className="text-xs text-[#7e7e88] ml-2">{currencySymbol} ({networkName})</span>
               </div>
               <span className="cc-badge">
                 <LockKeyhole className="w-3 h-3" />

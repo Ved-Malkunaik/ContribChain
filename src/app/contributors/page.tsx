@@ -12,7 +12,7 @@ import { IdentityPanel, FeedStatus } from '@/components/PlatformStatus'
 import { SubmissionProgress } from '@/components/SubmissionProgress'
 import { EmptyState, PageHeader, StatusBadge } from '@/components/ui/AppUI'
 import { GithubIcon } from '@/components/icons/GithubIcon'
-import { currencySymbol } from '@/lib/contract'
+import { currencySymbol, networkName } from '@/lib/contract'
 
 export default function ContributorsHubPage() {
   const { address, isConnected } = useAccount()
@@ -43,7 +43,7 @@ export default function ContributorsHubPage() {
       <form action="/api/auth/signin" method="get" className="hidden"><button id="github-signin">Sign in</button></form>
 
       {!mounted || !isConnected || !address ? (
-        <EmptyState title="Your next chapter starts here." description="Connect your BridgeKey or wallet from the navigation to track your submissions and confirmed MST Testnet rewards." action={<span className="cc-badge"><Wallet size={14} /> Wallet connection required</span>} />
+        <EmptyState title="Your next chapter starts here." description="Connect your BridgeKey or wallet from the navigation to track your submissions and confirmed {networkName} rewards." action={<span className="cc-badge"><Wallet size={14} /> Wallet connection required</span>} />
       ) : (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-10">
@@ -76,7 +76,7 @@ export default function ContributorsHubPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3"><div className="cc-inline"><span className="cc-badge"><GitPullRequest size={13} /> PR #{submission.prNumber}</span><span className="text-xs text-neutral-500">Submitted {new Date(submission.createdAt).toLocaleDateString()}</span>{submission.demo && <span className="cc-badge" data-tone="warning">Simulated PR · demo</span>}</div><StatusBadge status={presentation.status} /></div>
                   <div><p className="cc-eyebrow mb-2">{opportunity?.title || `Opportunity ${submission.opportunityId}`}</p><h3 className="text-xl font-semibold tracking-tight">{submission.prTitle}</h3></div>
                   <SubmissionProgress submission={presentation.status === 'Paid' ? { ...submission, status: 'Paid' } : submission} opportunity={opportunity} />
-                  {presentation.status === 'Paid' && <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.04] p-4 space-y-2"><p className="text-sm font-semibold text-emerald-300">{presentation.rewardEth ?? '—'} {currencySymbol} received · confirmed on MST Testnet</p><p className="text-xs text-neutral-400 break-all">Recipient <span className="font-mono">{presentation.recipient}</span></p>{presentation.receiptUrl && <a href={presentation.receiptUrl} target="_blank" rel="noreferrer" className="cc-btn cc-btn-secondary">View payment receipt on MSTScan <ExternalLink size={14} /></a>}</div>}
+                  {presentation.status === 'Paid' && <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.04] p-4 space-y-2"><p className="text-sm font-semibold text-emerald-300">{presentation.rewardEth ?? '—'} {currencySymbol} received · confirmed on {networkName}</p><p className="text-xs text-neutral-400 break-all">Recipient <span className="font-mono">{presentation.recipient}</span></p>{presentation.receiptUrl && <a href={presentation.receiptUrl} target="_blank" rel="noreferrer" className="cc-btn cc-btn-secondary">View payment receipt on MSTScan <ExternalLink size={14} /></a>}</div>}
                   <div className="cc-inline border-t border-white/10 pt-5">
                     <Link href={`/opportunities/${submission.opportunityId}`} className="cc-btn cc-btn-secondary">View opportunity <ArrowRight size={14} /></Link>
                     {!submission.demo && submission.githubPrUrl && <a href={submission.githubPrUrl} target="_blank" rel="noreferrer" className="cc-btn cc-btn-ghost">View pull request <ExternalLink size={14} /></a>}

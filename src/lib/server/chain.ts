@@ -1,5 +1,5 @@
 import { decodeEventLog, createPublicClient, http, keccak256, toHex, type Hash, type Address } from 'viem'
-import { mstTestnet, bountyAbi, contractAddress, deploymentBlock } from '../contract'
+import { activeChain, bountyAbi, contractAddress, deploymentBlock, networkName } from '../contract'
 import { db } from './db'
 import { rewardWei } from '../security'
 import { z } from 'zod'
@@ -7,25 +7,25 @@ import { z } from 'zod'
 export const json = (value: unknown) => JSON.stringify(value, (_, v) => typeof v === 'bigint' ? v.toString() : v)
 
 export const chainClient = createPublicClient({
-  chain: mstTestnet,
+  chain: activeChain,
   transport: http(
+    process.env.MSTC_RPC_URL ||
+    process.env.NEXT_PUBLIC_MSTC_RPC_URL ||
     process.env.MST_RPC_URL ||
     process.env.NEXT_PUBLIC_MST_RPC_URL ||
-    process.env.SEPOLIA_RPC_URL ||
-    process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL ||
-    'https://testnetrpc.mstblockchain.com'
+    'https://mariorpc.mstblockchain.com/'
   ),
 })
 
 export function chainConfig(): Address {
-  if (!contractAddress) throw new Error('MST Testnet contract address is not configured')
+  if (!contractAddress) throw new Error(`${networkName} contract address is not configured`)
   return contractAddress
 }
 
 export async function assertExpectedChain() {
   const actual = await chainClient.getChainId()
-  if (actual !== mstTestnet.id) {
-    throw new Error(`RPC chain ID mismatch: expected ${mstTestnet.id}, received ${actual}`)
+  if (actual !== activeChain.id) {
+    throw new Error(`RPC chain ID mismatch: expected ${activeChain.id}, received ${actual}`)
   }
 }
 
@@ -68,7 +68,7 @@ export async function reconcile(force = false) {
 
 async function indexChain() {
   const address = chainConfig()
-  const key = `${mstTestnet.id}:${address.toLowerCase()}`
+  const key = `${activeChain.id}:${address.toLowerCase()}`
   const checkpoint = await db.checkpoint.findUnique({ where: { id: key } })
   const start = BigInt(deploymentBlock || '0')
   const previous = checkpoint ? BigInt(checkpoint.block) : start
@@ -177,14 +177,14 @@ async function storeLog(
   log: { transactionHash: Hash; logIndex: number; blockNumber: bigint; eventName: string; args: unknown },
   r: { from: Address; blockNumber: bigint }
 ) {
-  const id = `${mstTestnet.id}:${log.transactionHash}:${log.logIndex}`
+  const id = `${activeChain.id}:${log.transactionHash}:${log.logIndex}`
   const args = log.args as Record<string, unknown>
 
   await db.chainEvent.upsert({
     where: { id },
     create: {
       id,
-      chainId: mstTestnet.id,
+      chainId: activeChain.id,
       contractAddress: chainConfig().toLowerCase(),
       transactionHash: log.transactionHash,
       logIndex: log.logIndex,

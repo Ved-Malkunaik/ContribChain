@@ -2,7 +2,7 @@
 import { useIdentity, useTransaction, useFeed } from '@/lib/use-platform'
 import { useState } from 'react'
 import { ArrowUpRight, CheckCircle2, FlaskConical, RefreshCw, ShieldCheck } from 'lucide-react'
-import { explorerUrl } from '@/lib/contract'
+import { explorerUrl, networkName, currencySymbol } from '@/lib/contract'
 import { transactionExplorerHref } from '@/lib/transaction-presentation'
 
 export function IdentityPanel() {
@@ -12,8 +12,8 @@ export function IdentityPanel() {
       <div role="note" className="cc-notice mb-5" data-tone="demo">
         <FlaskConical className="w-4 h-4 shrink-0 mt-0.5" />
         <div>
-          <strong className="block font-medium text-xs mb-1">Demo PRs. Real MST Testnet ($tMSTC) rewards.</strong>
-          <p className="text-[11px]">GitHub identity and merging can be simulated. Escrow funding, approval and payouts are real on MST Testnet.</p>
+          <strong className="block font-medium text-xs mb-1">Demo PRs. Real {networkName} (${currencySymbol}) rewards.</strong>
+          <p className="text-[11px]">GitHub identity and merging can be simulated. Escrow funding, approval and payouts are real on {networkName}.</p>
         </div>
       </div>
     )
@@ -62,7 +62,7 @@ export function FeedStatus() {
       <div className="cc-statusbar" role="status">
         <div className="cc-inline">
           <span className={'w-1.5 h-1.5 rounded-full ' + (error ? 'bg-[#d7b777]' : 'bg-[#a8d7bb]')} />
-          <span>{feed.isLoading ? 'Loading chain data' : feed.isFetching ? 'Syncing with MST Testnet' : 'MST Testnet'}</span>
+          <span>{feed.isLoading ? 'Loading chain data' : feed.isFetching ? `Syncing with ${networkName}` : networkName}</span>
           {feed.data.demoMode && (
             <>
               <span className="cc-badge">DEMO PR FLOW</span>
@@ -90,9 +90,9 @@ const confirmations: Record<string, string> = {
   approveContribution: 'Winner approved — payment is in escrow',
   rejectSubmission: 'Submission rejected',
   rejectContribution: 'Submission rejected',
-  releaseReward: 'Payment confirmed on MST Testnet',
-  refundExpiredOpportunity: 'Refund confirmed on MST Testnet',
-  cancelOpportunity: 'Refund confirmed on MST Testnet',
+  releaseReward: `Payment confirmed on ${networkName}`,
+  refundExpiredOpportunity: `Refund confirmed on ${networkName}`,
+  cancelOpportunity: `Refund confirmed on ${networkName}`,
 }
 
 export function TransactionStatus({ tx }: { tx: ReturnType<typeof useTransaction> }) {

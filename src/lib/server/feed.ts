@@ -1,5 +1,5 @@
 import { formatEther, parseEther } from 'viem'
-import { bountyAbi, contractAddress } from '../contract'
+import { bountyAbi, contractAddress, networkName, isMainnet } from '../contract'
 import { chainClient, chainConfig, reconcile } from './chain'
 import { db } from './db'
 import { refreshDuePulls } from './github'
@@ -148,12 +148,12 @@ export async function feed() {
   empty.opportunities = mappedOpps.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()) && (!o.onChainId || o.onChainId >= 8))
   empty.submissions = mappedSubs.filter(s => (!s.onChainId || s.onChainId >= 5) && !mockOppIds.has(s.opportunityId))
 
-  // 2. Synchronize with live MST Testnet escrow contract if configured
+  // 2. Synchronize with live escrow contract if configured
   if (configured) {
     try {
       await reconcile()
     } catch (error) {
-      empty.syncError = error instanceof Error ? error.message : 'MST Testnet sync unavailable'
+      empty.syncError = error instanceof Error ? error.message : `${networkName} sync unavailable`
     }
 
     // GitHub PR tracking is independent of escrow RPC availability.
@@ -196,7 +196,7 @@ export async function feed() {
     const defaultProject = empty.projects.find(p => p.name === 'StellarPoll' || p.repoUrl.includes('StellarPoll')) || empty.projects[0]
     const defaultProjectId = defaultProject?.id || 'a20e3399-e403-4c28-8699-6987885a6b47'
 
-    const initialOppId = 8n
+    const initialOppId = isMainnet ? 1n : 8n
     for (let i = initialOppId; i < nextOppId; i++) {
       try {
         const onChain = await chainClient.readContract({
@@ -248,7 +248,7 @@ export async function feed() {
 
           const snap = await db.snapshot.findFirst({ where: { hash: onChainMetadataHash } }).catch(() => null)
           let title = dbOpp?.title || `StellarPoll Feature #${i}`
-          let description = dbOpp?.description || 'Escrow bounty confirmed on MST Testnet'
+          let description = dbOpp?.description || `Escrow bounty confirmed on ${networkName}`
           let acceptanceCriteria = dbOpp?.acceptanceCriteria || 'Complete task criteria and merge PR on GitHub'
           let difficulty = dbOpp?.difficulty || 'intermediate'
           let requiredSkills = dbOpp?.requiredSkills ? (() => { try { return JSON.parse(dbOpp.requiredSkills) } catch { return ['TypeScript', 'Solidity'] } })() : ['TypeScript', 'Solidity']
@@ -321,7 +321,7 @@ export async function feed() {
       } catch {}
     }
 
-    const initialContribId = 5n
+    const initialContribId = isMainnet ? 1n : 5n
     for (let j = initialContribId; j < nextContribId; j++) {
       try {
         const c = await chainClient.readContract({
@@ -368,7 +368,7 @@ export async function feed() {
             prTitle: v?.title || `Refactor Background component for improved structure #${prNumber}`,
             prState: 'merged',
             status: contribStatus,
-            notes: v?.notes || 'MST Testnet contribution',
+            notes: v?.notes || `${networkName} contribution`,
             createdAt: v?.createdAt ? v.createdAt.toISOString() : new Date().toISOString(),
             identityVerified: true,
             demo: false,

@@ -6,9 +6,9 @@ import { Footer } from '@/components/layout/Footer'
 import { Suspense } from 'react'
 
 export const metadata: Metadata = {
-  title: 'ContribChain — Contribute Code, Earn tMSTC on MST Blockchain',
+  title: 'ContribChain — Contribute Code, Earn MSTC on MST Blockchain',
   description:
-    'Contribute to public GitHub projects and receive funded bounties on MST Blockchain testnet after publisher approval, merge, and payment confirmation.',
+    'Contribute to public GitHub projects and receive funded bounties on MST Blockchain after publisher approval, merge, and payment confirmation.',
   icons: {
     icon: '/assets/contribChainlogo.webp',
     shortcut: '/assets/contribChainlogo.webp',

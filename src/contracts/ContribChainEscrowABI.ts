@@ -211,10 +211,17 @@ export const CONTRIB_CHAIN_ESCROW_ABI = [
   },
 ] as const
 
+// Deployed MST Mainnet Contract Address
+export const MST_MAINNET_ESCROW_ADDRESS = "0x71B4e7686b45A60a7c294F865C424560dc0a2BE0" as const
+export const MST_MAINNET_CHAIN_ID = 4646 as const
+export const MST_MAINNET_EXPLORER = "https://mstscan.com" as const
+export const MST_MAINNET_RPC = "https://mariorpc.mstblockchain.com/" as const
+export const MST_MAINNET_SYMBOL = "MSTC" as const
+
 // Deployed MST Testnet Contract Address
 export const MST_TESTNET_ESCROW_ADDRESS = "0x1f3E1E9Bfe08153c5b3bA7311BB2d74415419a01" as const
 export const MST_TESTNET_CHAIN_ID = 91562037 as const
 export const MST_TESTNET_EXPLORER = "https://testnet.mstscan.com" as const
 export const MST_TESTNET_RPC = "https://testnetrpc.mstblockchain.com" as const
-export const MST_SYMBOL = "tMSTC" as const
+export const MST_SYMBOL = "MSTC" as const
 

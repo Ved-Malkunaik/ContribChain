@@ -4,7 +4,7 @@ import { formatEther, parseEther } from 'viem'
 import Link from 'next/link'
 import { useFeed } from '@/lib/use-platform'
 import { FeedStatus } from '@/components/PlatformStatus'
-import { currencySymbol } from '@/lib/contract'
+import { currencySymbol, networkName, isMainnet, chainId } from '@/lib/contract'
 
 export default function HomePage() {
   const { data } = useFeed()
@@ -56,7 +56,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="h-9 sm:h-10 bg-[#28282a] border border-white/40 rounded-full inline-flex items-center -ml-4 pl-6 pr-4 sm:pr-5 text-[#c4c2c3] font-medium text-xs sm:text-[13px] whitespace-nowrap relative z-[3]">
-            <span>MST Blockchain · MST Testnet</span>
+            <span>MST Blockchain · {networkName}</span>
           </div>
         </div>
 
@@ -163,7 +163,7 @@ export default function HomePage() {
                 BridgeKey Wallet Chrome Extension
               </h3>
               <p className="text-xs sm:text-sm text-[#99999f] leading-relaxed mb-6">
-                Install the official BridgeKey browser extension to authenticate with cryptographic signatures, link your wallet to ContribChain, and send escrow release transactions securely on MST Testnet.
+                Install the official BridgeKey browser extension to authenticate with cryptographic signatures, link your wallet to ContribChain, and send escrow release transactions securely on {networkName}.
               </p>
               <div className="mt-auto pt-3 border-t border-white/10 flex items-center justify-between">
                 <span className="text-[11px] text-[#71717a]">Chrome, Brave &amp; Edge</span>
@@ -190,20 +190,20 @@ export default function HomePage() {
                 </span>
               </div>
               <h3 className="text-lg font-semibold text-white mb-2">
-                Test Faucet in that Wallet
+                {isMainnet ? 'Fund Wallet with MSTC' : 'Test Faucet in that Wallet'}
               </h3>
               <p className="text-xs sm:text-sm text-[#99999f] leading-relaxed mb-6">
-                Fund your wallet address with free testnet MSTC (tMSTC) tokens via the official MSTScan faucet. Use testnet tokens to fund bounty escrows, interact with smart contracts, and claim development payouts.
+                {isMainnet ? 'Ensure your wallet is funded with MSTC on MST Mainnet. Use MSTC tokens to fund bounty escrows, interact with smart contracts, and claim developer payouts.' : 'Fund your wallet address with free testnet MSTC (tMSTC) tokens via the official MSTScan faucet. Use testnet tokens to fund bounty escrows, interact with smart contracts, and claim development payouts.'}
               </p>
               <div className="mt-auto pt-3 border-t border-white/10 flex items-center justify-between">
-                <span className="text-[11px] text-[#71717a]">MST Testnet · Chain ID 91562037</span>
+                <span className="text-[11px] text-[#71717a]">{networkName} · Chain ID {chainId}</span>
                 <a
-                  href="https://testnet.mstscan.com"
+                  href={isMainnet ? 'https://mstscan.com' : 'https://testnet.mstscan.com'}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 px-3.5 py-1.5 rounded-full transition-colors"
                 >
-                  <span>Claim tMSTC Faucet</span>
+                  <span>{isMainnet ? 'View on MSTScan' : 'Claim tMSTC Faucet'}</span>
                   <span className="text-[11px]">↗</span>
                 </a>
               </div>
@@ -238,7 +238,7 @@ export default function HomePage() {
                 Smart Contract-Based Bounty Escrow
               </h3>
               <p className="text-xs sm:text-sm text-[#99999f] leading-relaxed mb-5">
-                Rewards are funded in advance and held securely by the Solidity smart contract on MST Testnet until the publisher authorizes payment. Contributor payouts are guaranteed and tamper-proof.
+                Rewards are funded in advance and held securely by the Solidity smart contract on {networkName} until the publisher authorizes payment. Contributor payouts are guaranteed and tamper-proof.
               </p>
               <div className="mt-auto pt-3 border-t border-white/10 text-[11px] text-[#71717a] flex items-center gap-1.5">
                 <i className="fa-solid fa-lock text-[10px] text-white/60" />

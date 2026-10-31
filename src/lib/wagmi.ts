@@ -1,9 +1,9 @@
 import { http, createConfig } from 'wagmi'
 import { injected } from 'wagmi/connectors'
-import { mstTestnet } from './contract'
+import { mstMainnet, mstTestnet, isMainnet } from './contract'
 
 export const config = createConfig({
-  chains: [mstTestnet],
+  chains: isMainnet ? [mstMainnet, mstTestnet] : [mstTestnet, mstMainnet],
   connectors: [
     injected({
       shimDisconnect: true,
@@ -11,9 +11,15 @@ export const config = createConfig({
   ],
   multiInjectedProviderDiscovery: true,
   transports: {
-    [mstTestnet.id]: http(
+    [mstMainnet.id]: http(
+      process.env.NEXT_PUBLIC_MSTC_RPC_URL ||
+      process.env.MSTC_RPC_URL ||
       process.env.NEXT_PUBLIC_MST_RPC_URL ||
-      process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL ||
+      process.env.MST_RPC_URL ||
+      'https://mariorpc.mstblockchain.com/'
+    ),
+    [mstTestnet.id]: http(
+      process.env.NEXT_PUBLIC_TESTNET_RPC_URL ||
       'https://testnetrpc.mstblockchain.com'
     ),
   },

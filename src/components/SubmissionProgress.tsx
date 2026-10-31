@@ -1,7 +1,7 @@
 'use client'
 import type { Submission, Opportunity } from '@/types'
 import { ArrowUpRight } from 'lucide-react'
-import { explorerUrl, currencySymbol } from '@/lib/contract'
+import { explorerUrl, currencySymbol, networkName } from '@/lib/contract'
 
 export function SubmissionProgress({
   submission: s,
@@ -46,7 +46,7 @@ export function SubmissionProgress({
         <div>
           <p>03 · Escrow payment</p>
           <strong className={paid ? '!text-[#b0e5c5]' : ''}>
-            {paid ? 'Paid on MST Testnet' : o?.state === 'Refunded' ? 'Refunded' : s.status === 'Approved' ? 'Awaiting publisher' : 'Not paid'}
+            {paid ? `Paid on ${networkName}` : o?.state === 'Refunded' ? 'Refunded' : s.status === 'Approved' ? 'Awaiting publisher' : 'Not paid'}
           </strong>
         </div>
       </div>
@@ -57,7 +57,7 @@ export function SubmissionProgress({
       )}
       {s.demo && (
         <p className="text-[10px] text-[#93856d]">
-          Demo PR · GitHub identity and merge are simulated. Wallet payments are real {currencySymbol} on MST Testnet.
+          Demo PR · GitHub identity and merge are simulated. Wallet payments are real {currencySymbol} on {networkName}.
         </p>
       )}
       {!s.demo && <p className="text-[10px] text-[#656571]">Last sync: {s.lastSyncedAt || 'Pending'} · Commit: {s.prCommit?.slice(0, 12) || 'Unknown'}</p>}

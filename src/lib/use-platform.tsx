@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'wagmi'
 import { decodeFunctionData, encodeFunctionData, formatEther, type Abi, type Hash, type Hex } from 'viem'
-import { bountyAbi, contractAddress, chainId, currencySymbol } from './contract'
+import { bountyAbi, contractAddress, chainId, currencySymbol, networkName } from './contract'
 import type { Project, Opportunity, Submission } from '@/types'
 import { verifyIntentTransaction, type TransactionIntent } from './transaction-intent'
 import { isConfirmedTransactionFor } from './transaction-confirmation'
@@ -128,7 +128,7 @@ export function useIdentity() {
     setBusy(true)
     try {
       if (!address || connectedChain !== chainId) {
-        throw new Error('Connect your wallet on MST Testnet first')
+        throw new Error(`Connect your wallet on ${networkName} first`)
       }
       const c = await api<{ id: string; message: string }>('wallet/challenge', { address })
       const signature = await signMessageAsync({ message: c.message })
@@ -172,7 +172,7 @@ export function useTransaction() {
 
   const settle = useCallback(
     async (pending: Pending) => {
-      if (!publicClient) throw new Error('MST Testnet RPC unavailable')
+      if (!publicClient) throw new Error(`${networkName} RPC unavailable`)
       let current = pending
       const original = await publicClient.getTransaction({ hash: current.hash }).catch(() => null)
       let sameAction = true
@@ -212,7 +212,7 @@ export function useTransaction() {
       if (receipt.status !== 'success') {
         await api('transactions/reconcile', { hash: current.hash }, current.wallet).catch(() => {})
         localStorage.removeItem(pendingKey)
-        throw new Error('Transaction reverted on MST Testnet; escrow state was not changed')
+        throw new Error(`Transaction reverted on ${networkName}; escrow state was not changed`)
       }
       await api('transactions/track', current, current.wallet)
       await api('transactions/reconcile', { hash: current.hash }, current.wallet)
@@ -223,7 +223,7 @@ export function useTransaction() {
       } catch {
         setConfirmedFunction('')
       }
-      setMessage('Confirmed on MST Testnet. Data synchronized.')
+      setMessage(`Confirmed on ${networkName}. Data synchronized.`)
       await cache.invalidateQueries()
       return current.hash
     },
@@ -251,10 +251,10 @@ export function useTransaction() {
         }
       }
       if (!address || connectedChain !== chainId) {
-        throw new Error('Connect your wallet and switch to MST Testnet')
+        throw new Error(`Connect your wallet and switch to ${networkName}`)
       }
       if (!contractAddress || !publicClient) {
-        throw new Error('MST Testnet escrow contract is not configured')
+        throw new Error(`${networkName} escrow contract is not configured`)
       }
       if (!identity.data?.authenticated || identity.data.wallet !== address.toLowerCase()) {
         throw new Error('Connect your wallet before using protected platform actions')
@@ -312,7 +312,7 @@ export function useTransaction() {
       }
       localStorage.setItem(pendingKey, JSON.stringify(pending))
       setHash(tx)
-      setMessage('Transaction submitted on MST Testnet. Waiting for confirmation…')
+      setMessage(`Transaction submitted on ${networkName}. Waiting for confirmation…`)
       return await settle(pending)
     } catch (e) {
       const rawMsg = e instanceof Error ? e.message : 'Transaction failed'
@@ -344,7 +344,7 @@ export function useTransaction() {
           pending = { ...pending, hash: replacementHash as Hash }
         }
         setHash(pending.hash)
-        setMessage('Recovering pending transaction on MST Testnet…')
+        setMessage(`Recovering pending transaction on ${networkName}…`)
         await settle(pending)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Recovery failed')

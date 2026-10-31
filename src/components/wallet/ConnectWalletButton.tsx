@@ -23,7 +23,7 @@ import {
   X,
   Sparkles,
 } from 'lucide-react'
-import { mstTestnet, explorerUrl, currencySymbol } from '@/lib/contract'
+import { activeChain, explorerUrl, currencySymbol, networkName, isMainnet } from '@/lib/contract'
 import { useIdentity } from '@/lib/use-platform'
 
 export function ConnectWalletButton() {
@@ -36,7 +36,7 @@ export function ConnectWalletButton() {
 
   const { data: balanceData, isLoading: isBalanceLoading } = useBalance({
     address,
-    chainId: mstTestnet.id,
+    chainId: activeChain.id,
   })
 
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -48,7 +48,7 @@ export function ConnectWalletButton() {
     setMounted(true)
   }, [])
 
-  const isWrongNetwork = isConnected && chainId !== mstTestnet.id
+  const isWrongNetwork = isConnected && chainId !== activeChain.id
 
   const copyAddress = () => {
     if (address) {
@@ -131,15 +131,19 @@ export function ConnectWalletButton() {
                   >
                     Install Extension <ExternalLink className="w-3 h-3" />
                   </a>
-                  <span className="text-neutral-500">·</span>
-                  <a
-                    href="https://faucet.mstblockchain.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-neutral-300 hover:text-white font-medium underline"
-                  >
-                    Claim tMSTC Faucet <ExternalLink className="w-3 h-3" />
-                  </a>
+                  {!isMainnet && (
+                    <>
+                      <span className="text-neutral-500">·</span>
+                      <a
+                        href="https://faucet.mstblockchain.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-neutral-300 hover:text-white font-medium underline"
+                      >
+                        Claim tMSTC Faucet <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -178,7 +182,7 @@ export function ConnectWalletButton() {
                   <button
                     key={connector.uid}
                     onClick={() => {
-                      connect({ connector, chainId: mstTestnet.id })
+                      connect({ connector, chainId: activeChain.id })
                     }}
                     disabled={isConnectPending || isConnecting}
                     className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-white/10 bg-white/[0.025] hover:bg-white/[0.06] hover:border-white/25 transition-all text-left text-sm font-medium text-white group disabled:opacity-50 cursor-pointer"
@@ -206,7 +210,7 @@ export function ConnectWalletButton() {
               </div>
 
               <div className="pt-4 border-t border-white/10 text-[11px] text-neutral-400 flex items-center justify-between">
-                <span>Network: MST Testnet ({mstTestnet.id})</span>
+                <span>Network: {networkName} ({activeChain.id})</span>
                 <span className="text-neutral-500">Non-custodial</span>
               </div>
             </div>
@@ -223,19 +227,19 @@ export function ConnectWalletButton() {
         {/* Network Badge */}
         {isWrongNetwork ? (
           <button
-            onClick={() => switchChain({ chainId: mstTestnet.id })}
+            onClick={() => switchChain({ chainId: activeChain.id })}
             disabled={isSwitchPending}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-300 text-xs font-semibold rounded-full transition-colors cursor-pointer"
-            title="Click to switch to MST Testnet"
+            title={`Click to switch to ${networkName}`}
           >
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-            <span>{isSwitchPending ? 'Switching...' : 'Switch to MST Testnet'}</span>
+            <span>{isSwitchPending ? 'Switching...' : `Switch to ${networkName}`}</span>
             <ArrowRightLeft className="w-3 h-3 text-amber-400 ml-0.5" />
           </button>
         ) : (
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-xs font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>MST Testnet</span>
+            <span>{networkName}</span>
           </div>
         )}
 
@@ -327,7 +331,7 @@ export function ConnectWalletButton() {
 
             {/* Balance info */}
             <div className="py-3 border-b border-white/10 space-y-1">
-              <div className="text-[11px] text-neutral-400">MST Testnet Balance</div>
+              <div className="text-[11px] text-neutral-400">{networkName} Balance</div>
               <div className="text-base font-semibold text-white font-mono">{formatBalance()}</div>
             </div>
 
@@ -346,30 +350,32 @@ export function ConnectWalletButton() {
                 <ExternalLink className="w-3 h-3 text-neutral-400" />
               </a>
 
-              <a
-                href="https://faucet.mstblockchain.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between p-2 rounded-xl text-indigo-300 hover:text-indigo-200 hover:bg-indigo-500/10 transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                  Claim Testnet Faucet ($tMSTC)
-                </span>
-                <ExternalLink className="w-3 h-3 text-indigo-400" />
-              </a>
+              {!isMainnet && (
+                <a
+                  href="https://faucet.mstblockchain.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-2 rounded-xl text-indigo-300 hover:text-indigo-200 hover:bg-indigo-500/10 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    Claim Testnet Faucet ($tMSTC)
+                  </span>
+                  <ExternalLink className="w-3 h-3 text-indigo-400" />
+                </a>
+              )}
 
               {isWrongNetwork && (
                 <button
                   onClick={() => {
-                    switchChain({ chainId: mstTestnet.id })
+                    switchChain({ chainId: activeChain.id })
                     setIsDropdownOpen(false)
                   }}
                   className="w-full flex items-center justify-between p-2 rounded-xl text-amber-300 hover:bg-amber-500/10 transition-colors"
                 >
                   <span className="flex items-center gap-2">
                     <ArrowRightLeft className="w-3.5 h-3.5 text-amber-400" />
-                    Switch to MST Testnet
+                    Switch to {networkName}
                   </span>
                 </button>
               )}

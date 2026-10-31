@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { formatEther, parseEther } from 'viem'
-import { currencySymbol } from '@/lib/contract'
+import { currencySymbol, networkName } from '@/lib/contract'
 import { Search, FolderGit2, ArrowRight, ArrowUpRight } from 'lucide-react'
 import { useFeed } from '@/lib/use-platform'
 import { FeedStatus } from '@/components/PlatformStatus'
@@ -29,7 +29,7 @@ export default function ExplorePage() {
   return (
     <div className="cc-page">
       <FeedStatus />
-      <PageHeader eyebrow="THE OPEN SOURCE OPPORTUNITY BOARD · MST TESTNET" title="Find your next contribution."
+      <PageHeader eyebrow={`THE OPEN SOURCE OPPORTUNITY BOARD · ${networkName.toUpperCase()}`} title="Find your next contribution."
         description="Discover open-source dApps on MST Blockchain, find work that fits your skills, and earn from funded opportunities."
         action={<Link href="/publisher/projects/new" className="cc-btn cc-btn-primary">List your dApp <ArrowUpRight size={16} /></Link>} />
       <section className="cc-panel mb-10" aria-label="Filter projects">
@@ -54,10 +54,10 @@ export default function ExplorePage() {
       </section>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <h2 className="text-xl font-semibold tracking-tight text-white">Explore projects <span className="ml-2 text-sm font-normal text-neutral-500">{filteredProjects.length}</span></h2>
-        <p className="text-xs text-neutral-500">Escrow balances reflect confirmed MST Testnet activity.</p>
+        <p className="text-xs text-neutral-500">Escrow balances reflect confirmed {networkName} activity.</p>
       </div>
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        {isLoading && <div className="cc-empty col-span-full" role="status"><p>Loading projects from MST Testnet…</p></div>}
+        {isLoading && <div className="cc-empty col-span-full" role="status"><p>Loading projects from {networkName}…</p></div>}
         {filteredProjects.map((project) => {
           const projectOpps = data.opportunities.filter((o) => o.projectId === project.id)
           const totalBounty = formatEther(projectOpps.reduce((sum, o) => sum + parseEther(o.remainingEscrowEth), 0n))
