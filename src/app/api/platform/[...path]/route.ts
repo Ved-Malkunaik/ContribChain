@@ -1,7 +1,7 @@
 import { randomUUID, randomBytes, createHash } from 'node:crypto'
 import { z } from 'zod'
 import { decodeFunctionData, keccak256, toHex, isAddress, verifyMessage, type Hash } from 'viem'
-import { db } from '@/lib/server/db'
+import { db, ensureDatabaseReady } from '@/lib/server/db'
 import { appOrigin, assertOrigin, currentSession, requireWallet, demoMode } from '@/lib/server/auth'
 import { canonicalize, challengeMessage, parseRepo, parsePull, rewardWei } from '@/lib/security'
 import { repository, pull, syncPull, matchesRegisteredRepository } from '@/lib/server/github'
@@ -728,6 +728,7 @@ async function route(request: Request, context: { params: Promise<{ path: string
 
 async function handler(request: Request, context: { params: Promise<{ path: string[] }> }) {
   try {
+    await ensureDatabaseReady()
     return await route(request, context)
   } catch (error) {
     if (error instanceof FeedReadError) {

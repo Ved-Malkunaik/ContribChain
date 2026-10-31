@@ -26,13 +26,22 @@ function getFilePathFromUrl(url: string): string {
   return resolve(process.cwd(), 'prisma', withoutFile)
 }
 
-function ensureLocalDatabaseInitialized(url: string) {
+function ensureLocalDatabaseDirectory(url: string) {
   try {
     const dbPath = getFilePathFromUrl(url)
     const dir = dirname(dbPath)
-    if (!existsSync(/*turbopackIgnore: true*/ dir)) {
+    if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
     }
+  } catch (err) {
+    console.warn('[db] local directory init notice:', err)
+  }
+}
+
+function ensureLocalDatabaseInitialized(url: string) {
+  try {
+    const dbPath = getFilePathFromUrl(url)
+    ensureLocalDatabaseDirectory(url)
 
     if (!DatabaseSyncClass) return
 
@@ -41,7 +50,7 @@ function ensureLocalDatabaseInitialized(url: string) {
       try {
         const checkSqlite = new DatabaseSyncClass(dbPath)
         const row = checkSqlite
-          .prepare("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name='Checkpoint'")
+          .prepare("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name='Snapshot'")
           .get() as { count: number } | undefined
         checkSqlite.close()
         needsSchema = !row || row.count === 0
@@ -68,6 +77,31 @@ function ensureLocalDatabaseInitialized(url: string) {
   }
 }
 
+async function ensureSqliteSchema(prisma: PrismaClient) {
+  try {
+    try {
+      const res = await prisma.$queryRawUnsafe<Array<{ count: bigint | number }>>(
+        "SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name='Snapshot'",
+      )
+      if (res?.[0] && Number(res[0].count) > 0) {
+        return
+      }
+    } catch {
+      // Table check failed or tables do not exist yet
+    }
+
+    for (const statement of SCHEMA_STATEMENTS) {
+      try {
+        await prisma.$executeRawUnsafe(statement)
+      } catch {
+        // Table or index already exists
+      }
+    }
+  } catch (err) {
+    console.warn('[db] sqlite schema init notice:', err)
+  }
+}
+
 async function ensureLibsqlSchema(url: string, authToken: string) {
   const schemaStatements = SCHEMA_STATEMENTS.filter(statement =>
     /^\s*(?:CREATE\s+TABLE|CREATE\s+(?:UNIQUE\s+)?INDEX|ALTER\s+TABLE)\b/i.test(statement),
@@ -89,13 +123,14 @@ const databaseConfig = resolveDatabaseConfig({
   TURSO_DATABASE_URL: process.env.TURSO_DATABASE_URL,
   TURSO_AUTH_TOKEN: process.env.TURSO_AUTH_TOKEN,
 })
-const isNextBuildPhase = process.env.NEXT_PHASE === 'phase-production-build'
-if (databaseConfig.kind === 'sqlite' && !isNextBuildPhase) {
+
+if (databaseConfig.kind === 'sqlite') {
+  ensureLocalDatabaseDirectory(databaseConfig.url)
   ensureLocalDatabaseInitialized(databaseConfig.url)
 }
 
 const globalDb = globalThis as unknown as { contribchainDb?: PrismaClient }
-let client = globalDb.contribchainDb
+let client: PrismaClient = globalDb.contribchainDb!
 if (!client) {
   client = databaseConfig.kind === 'libsql'
     ? new PrismaClient({
@@ -108,11 +143,19 @@ if (!client) {
       })
   if (databaseConfig.kind === 'libsql') {
     await ensureLibsqlSchema(databaseConfig.url, databaseConfig.authToken)
+  } else if (databaseConfig.kind === 'sqlite') {
+    await ensureSqliteSchema(client)
   }
   globalDb.contribchainDb = client
 }
 
-export const db = client
+export async function ensureDatabaseReady() {
+  if (databaseConfig.kind === 'sqlite') {
+    await ensureSqliteSchema(client)
+  }
+}
+
+export const db: PrismaClient = client
 
 if (process.env.NODE_ENV !== 'production') {
   globalDb.contribchainDb = db
