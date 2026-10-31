@@ -3,6 +3,7 @@
 import { use, useEffect, useState, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useQueryClient } from '@tanstack/react-query'
 import { useFeed, useTransaction } from '@/lib/use-platform'
 import { IdentityPanel, FeedStatus, TransactionStatus } from '@/components/PlatformStatus'
 
@@ -30,6 +31,7 @@ function NewOpportunityContent({
   const projectId = resolvedParams.id
   const router = useRouter()
   const tx = useTransaction()
+  const cache = useQueryClient()
   const { data } = useFeed()
   const { isConnected, address } = useAccount()
 
@@ -55,7 +57,16 @@ function NewOpportunityContent({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [copiedTx, setCopiedTx] = useState(false)
-  const funded = tx.confirmedFor('createOpportunity', projectId)
+  const [createdTxHash, setCreatedTxHash] = useState<string>('')
+
+  const funded = Boolean(
+    createdTxHash ||
+    (tx.confirmedFunction === 'createOpportunity' && tx.hash) ||
+    tx.confirmedFor('createOpportunity', projectId) ||
+    (project && tx.confirmedFor('createOpportunity', project.id)) ||
+    (project && project.repoId && tx.confirmedFor('createOpportunity', project.repoId))
+  )
+  const activeTxHash = createdTxHash || tx.hash
 
   const validate = () => {
     const errs: Record<string, string> = {}
@@ -93,7 +104,35 @@ function NewOpportunityContent({
     if (!validate()) return
     setIsSubmitting(true)
     try {
-      await tx.send('opportunities/prepare', { ...formData, projectId })
+      const hashResult = await tx.send('opportunities/prepare', { ...formData, projectId })
+      if (hashResult) {
+        setCreatedTxHash(hashResult)
+      }
+      try {
+        const oppToStore = {
+          id: hashResult || `opp-${Date.now()}`,
+          projectId: project?.id || projectId,
+          publisherAddress: address?.toLowerCase() || '',
+          title: formData.title,
+          taskType: formData.taskType,
+          description: formData.description,
+          acceptanceCriteria: formData.acceptanceCriteria,
+          difficulty: formData.difficulty,
+          requiredSkills: formData.requiredSkills.split(',').map((s) => s.trim()).filter(Boolean),
+          rewardEth: formData.rewardEth,
+          deadline: new Date(Date.now() + parseInt(formData.deadlineDays, 10) * 86400000).toISOString(),
+          issueUrl: formData.issueUrl || null,
+          state: 'Open',
+          remainingEscrowEth: formData.rewardEth,
+          submissionsCount: 0,
+          txHash: hashResult || tx.hash,
+          createdAt: new Date().toISOString(),
+        }
+        const storedOpps = JSON.parse(localStorage.getItem('contribchain.opportunities') || '[]')
+        const updatedOpps = [oppToStore, ...storedOpps.filter((o: any) => o.id !== oppToStore.id)]
+        localStorage.setItem('contribchain.opportunities', JSON.stringify(updatedOpps))
+      } catch {}
+      await cache.invalidateQueries({ queryKey: ['platform-feed'] })
     } catch {
       /* TransactionStatus displays the actionable error. */
     } finally {
@@ -175,14 +214,14 @@ function NewOpportunityContent({
             <div>
               <p className="text-[11px] text-neutral-500 mb-1">Transaction Hash</p>
               <p className="font-mono text-xs text-neutral-200 break-all bg-white/[0.03] p-2.5 rounded-xl border border-white/5 select-all">
-                {tx.hash || `Transaction confirmed on ${networkName}`}
+                {activeTxHash || `Transaction confirmed on ${networkName}`}
               </p>
             </div>
 
-            {tx.hash && (
+            {activeTxHash && (
               <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
                 <a
-                  href={`${explorerUrl}/tx/${tx.hash}`}
+                  href={`${explorerUrl}/tx/${activeTxHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs text-indigo-300 hover:text-indigo-200 font-medium underline"
@@ -194,8 +233,8 @@ function NewOpportunityContent({
                 <button
                   type="button"
                   onClick={() => {
-                    if (tx.hash) {
-                      navigator.clipboard.writeText(tx.hash)
+                    if (activeTxHash) {
+                      navigator.clipboard.writeText(activeTxHash)
                       setCopiedTx(true)
                       setTimeout(() => setCopiedTx(false), 2000)
                     }
@@ -210,12 +249,12 @@ function NewOpportunityContent({
           </div>
 
           <div className="flex flex-wrap justify-center gap-3 pt-2">
-            <Link href={'/projects/' + projectId} className="cc-btn cc-btn-primary">
+            <Link href={`/projects/${project?.id || projectId}`} className="cc-btn cc-btn-primary">
               Return to Project
             </Link>
-            {tx.hash && (
+            {activeTxHash && (
               <a
-                href={`${explorerUrl}/tx/${tx.hash}`}
+                href={`${explorerUrl}/tx/${activeTxHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="cc-btn cc-btn-secondary"

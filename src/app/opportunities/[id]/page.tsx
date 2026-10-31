@@ -11,6 +11,18 @@ import { IdentityPanel, FeedStatus, TransactionStatus } from '@/components/Platf
 import { PageHeader, StatusBadge, EmptyState } from '@/components/ui/AppUI'
 import { explorerUrl, currencySymbol, networkName } from '@/lib/contract'
 
+function parseSkills(val: unknown): string[] {
+  if (Array.isArray(val)) return val.filter(Boolean).map(String)
+  if (typeof val === 'string') {
+    try {
+      const p = JSON.parse(val)
+      if (Array.isArray(p)) return p.filter(Boolean).map(String)
+    } catch {}
+    return val.split(',').map((s: string) => s.trim()).filter(Boolean)
+  }
+  return []
+}
+
 function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
   const { data, isLoading } = useFeed()
   const tx = useTransaction()
@@ -83,7 +95,11 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
               <div className="whitespace-pre-line rounded-2xl border border-white/10 bg-black/30 p-5 text-sm leading-8 text-neutral-300">{opportunity.acceptanceCriteria}</div>
             </div>
             <div className="mt-7 border-t border-white/10 pt-6"><h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-neutral-500">Bring these skills</h3>
-              <div className="flex flex-wrap gap-2">{opportunity.requiredSkills.map((skill) => <span key={skill} className="cc-badge !font-mono">{skill}</span>)}</div>
+              <div className="flex flex-wrap gap-2">
+                {parseSkills(opportunity.requiredSkills).map((skill) => (
+                  <span key={skill} className="cc-badge !font-mono">{skill}</span>
+                ))}
+              </div>
             </div>
           </section>
           <section className="cc-panel">

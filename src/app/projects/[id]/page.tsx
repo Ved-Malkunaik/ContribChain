@@ -11,6 +11,18 @@ import { FeedStatus } from '@/components/PlatformStatus'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/ui/AppUI'
 import { GithubIcon } from '@/components/icons/GithubIcon'
 
+function parseList(val: unknown): string[] {
+  if (Array.isArray(val)) return val.filter(Boolean).map(String)
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val)
+      if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String)
+    } catch {}
+    return val.split(',').map((s) => s.trim()).filter(Boolean)
+  }
+  return []
+}
+
 function ProjectContent({ params }: { params: Promise<{ id: string }> }) {
   const { data, isLoading } = useFeed()
   const projectId = use(params).id
@@ -23,7 +35,16 @@ function ProjectContent({ params }: { params: Promise<{ id: string }> }) {
   const isPublisher = mounted && !!address && !!project && address.toLowerCase() === project.publisherAddress.toLowerCase()
   if (isLoading) return <div className="cc-page"><p className="cc-empty" role="status">Loading project…</p></div>
   if (!project) return <div className="cc-page"><FeedStatus /><EmptyState title="Project not found" description="This project does not exist or has not been synced yet." action={<Link href="/explore" className="cc-btn cc-btn-primary">Return to explore</Link>} /></div>
-  const totalEscrow = formatEther(opportunities.reduce((sum, o) => sum + parseEther(o.remainingEscrowEth), 0n))
+  const totalEscrow = formatEther(
+    opportunities.reduce((sum, o) => {
+      try {
+        return sum + parseEther(o.remainingEscrowEth || o.rewardEth || '0')
+      } catch {
+        return sum
+      }
+    }, 0n)
+  )
+  const techList = parseList(project.technologies)
 
   return (
     <div className="cc-page">
@@ -35,7 +56,7 @@ function ProjectContent({ params }: { params: Promise<{ id: string }> }) {
         <section className="cc-panel min-w-0">
           <p className="cc-eyebrow mb-5">THE PROJECT</p><h2 className="mb-4 text-xl font-semibold tracking-tight text-white">Built in the open.</h2>
           <p className="whitespace-pre-line text-sm leading-8 text-neutral-400">{project.detailedDescription}</p>
-          <div className="mt-7 flex flex-wrap gap-2">{project.technologies.map((tech) => <span key={tech} className="cc-badge !font-mono">{tech}</span>)}</div>
+          <div className="mt-7 flex flex-wrap gap-2">{techList.map((tech) => <span key={tech} className="cc-badge !font-mono">{tech}</span>)}</div>
           <div className="mt-8 flex flex-wrap gap-3 border-t border-white/10 pt-6">
             <a href={project.repoUrl} target="_blank" rel="noopener noreferrer" className="cc-btn cc-btn-secondary"><GithubIcon className="h-4 w-4" />GitHub repository<ExternalLink size={13} /></a>
             {project.demoVideoUrl && <a href={project.demoVideoUrl} target="_blank" rel="noopener noreferrer" className="cc-btn cc-btn-ghost"><Video size={16} />Watch demo<ExternalLink size={13} /></a>}

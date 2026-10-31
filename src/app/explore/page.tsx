@@ -14,15 +14,27 @@ export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [technology, setTechnology] = useState('All')
+  const getTechList = (val: unknown): string[] => {
+    if (Array.isArray(val)) return val.filter(Boolean).map(String)
+    if (typeof val === 'string') {
+      try {
+        const parsed = JSON.parse(val)
+        if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String)
+      } catch {}
+      return val.split(',').map((s) => s.trim()).filter(Boolean)
+    }
+    return []
+  }
   const categories = useMemo(() => ['All', ...Array.from(new Set(data.projects.map((p) => p.category)))], [data.projects])
-  const technologies = useMemo(() => Array.from(new Set(data.projects.flatMap((p) => p.technologies))).sort(), [data.projects])
+  const technologies = useMemo(() => Array.from(new Set(data.projects.flatMap((p) => getTechList(p.technologies)))).sort(), [data.projects])
   const filteredProjects = useMemo(() => data.projects.filter((project) => {
+    const pTechs = getTechList(project.technologies)
     const matchesCategory = selectedCategory === 'All' || project.category === selectedCategory
     const query = searchQuery.toLowerCase()
     const matchesSearch = project.name.toLowerCase().includes(query)
       || project.shortDescription.toLowerCase().includes(query)
-      || project.technologies.some((t) => t.toLowerCase().includes(query))
-    return matchesCategory && matchesSearch && (technology === 'All' || project.technologies.includes(technology))
+      || pTechs.some((t) => t.toLowerCase().includes(query))
+    return matchesCategory && matchesSearch && (technology === 'All' || pTechs.includes(technology))
   }), [searchQuery, selectedCategory, technology, data.projects])
   const resetFilters = () => { setSearchQuery(''); setSelectedCategory('All'); setTechnology('All') }
 
@@ -65,7 +77,7 @@ export default function ExplorePage() {
             <div className="mb-7 flex items-center justify-between gap-4"><span className="cc-badge">{project.category}</span><ArrowUpRight size={20} className="text-neutral-600 transition-colors group-hover:text-white" /></div>
             <h3 className="mb-3 text-2xl font-semibold tracking-tight text-white">{project.name}</h3>
             <p className="mb-5 line-clamp-2 text-sm leading-7 text-neutral-400">{project.shortDescription}</p>
-            <div className="mb-8 flex flex-wrap gap-2">{project.technologies.map((tech) => <span key={tech} className="cc-badge !font-mono">{tech}</span>)}</div>
+            <div className="mb-8 flex flex-wrap gap-2">{getTechList(project.technologies).map((tech) => <span key={tech} className="cc-badge !font-mono">{tech}</span>)}</div>
             <div className="mt-auto border-t border-white/10 pt-6">
               <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
                 <div><p className="mb-1 text-xs text-neutral-500">Available escrow</p><p className="text-2xl font-medium tracking-tight text-white">{totalBounty} <span className="text-sm text-neutral-500">{currencySymbol}</span></p></div>

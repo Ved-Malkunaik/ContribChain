@@ -85,10 +85,32 @@ export const activeChain = isMainnet ? mstMainnet : mstTestnet
 export const chainId = activeChain.id
 export const networkName = activeChain.name
 export const currencySymbol = (process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || activeChain.nativeCurrency.symbol) as string
-export const explorerUrl = (
-  process.env.NEXT_PUBLIC_MST_EXPLORER_URL ||
-  (isMainnet ? 'https://mstscan.com' : 'https://testnet.mstscan.com')
-).replace(/\/$/, '')
+export function getExplorerUrl(mainnet: boolean): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_MST_EXPLORER_URL,
+    process.env.NEXT_PUBLIC_EXPLORER_URL,
+    process.env.MST_EXPLORER_URL,
+  ]
+  if (mainnet) {
+    for (const c of candidates) {
+      const trimmed = c?.trim()
+      if (trimmed && !trimmed.toLowerCase().includes('testnet')) {
+        return trimmed.replace(/\/+$/, '')
+      }
+    }
+    return 'https://mstscan.com'
+  } else {
+    for (const c of candidates) {
+      const trimmed = c?.trim()
+      if (trimmed && trimmed.toLowerCase().includes('testnet')) {
+        return trimmed.replace(/\/+$/, '')
+      }
+    }
+    return 'https://testnet.mstscan.com'
+  }
+}
+
+export const explorerUrl = getExplorerUrl(isMainnet)
 
 export function resolveContractAddress(mainnet: boolean): Address {
   const envAddress = (

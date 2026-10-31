@@ -333,9 +333,13 @@ async function route(request: Request, context: { params: Promise<{ path: string
       data: { published: true, chainRef: m.id },
     })
 
+    const techArray = input.technologies.split(',').map(x => x.trim()).filter(Boolean)
     return response({
       completed: true,
-      project: dbProject,
+      project: {
+        ...dbProject,
+        technologies: techArray,
+      },
       intentId: m.id,
       message: 'Project registered off-chain successfully',
     })
@@ -411,12 +415,31 @@ async function route(request: Request, context: { params: Promise<{ path: string
       },
     })
 
+    const skillArray = input.requiredSkills.split(',').map(x => x.trim()).filter(Boolean)
     return response({
       intentId: m.id,
       call: {
         functionName: 'createOpportunity',
         args: [projectRef, m.hash, deadline.toString()],
         value: reward.toString(),
+      },
+      opportunity: {
+        id: m.id,
+        projectId: project.id,
+        publisherAddress: wallet,
+        title: input.title,
+        taskType: input.taskType || 'feature',
+        description: input.description,
+        acceptanceCriteria: input.acceptanceCriteria,
+        difficulty: input.difficulty || 'Intermediate',
+        requiredSkills: skillArray,
+        rewardEth: String(input.rewardEth),
+        deadline: new Date(Number(deadline) * 1000).toISOString(),
+        issueUrl: input.issueUrl || null,
+        state: 'Open',
+        remainingEscrowEth: String(input.rewardEth),
+        submissionsCount: 0,
+        createdAt: new Date().toISOString(),
       },
     })
   }

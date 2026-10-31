@@ -41,34 +41,89 @@ export async function api<T = Record<string, unknown>>(path: string, body?: unkn
   return value
 }
 
+function normalizeStringList(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter(Boolean).map(String)
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String)
+    } catch {}
+    return raw.split(',').map((s) => s.trim()).filter(Boolean)
+  }
+  return []
+}
+
+function sanitizeProject(p: any): Project {
+  return {
+    ...p,
+    technologies: normalizeStringList(p.technologies),
+    opportunitiesCount: p.opportunitiesCount ?? (Array.isArray(p.opportunities) ? p.opportunities.length : 0),
+  }
+}
+
+function sanitizeOpportunity(o: any): Opportunity {
+  return {
+    ...o,
+    requiredSkills: normalizeStringList(o.requiredSkills),
+    remainingEscrowEth: o.remainingEscrowEth ?? o.rewardEth ?? '0',
+    submissionsCount: o.submissionsCount ?? 0,
+  }
+}
+
 export function useFeed() {
   const query = useQuery({
     queryKey: ['platform-feed'],
     queryFn: async () => {
-      let localProjects: Project[] = []
+      let localProjects: any[] = []
+      let localOpps: any[] = []
+      let cachedFeed: Feed | null = null
       try {
         if (typeof window !== 'undefined') {
           localProjects = JSON.parse(localStorage.getItem('contribchain.projects') || '[]')
+          localOpps = JSON.parse(localStorage.getItem('contribchain.opportunities') || '[]')
+          cachedFeed = JSON.parse(localStorage.getItem('contribchain.cached_feed') || 'null')
         }
       } catch {}
 
-      const serverFeed = await api<Feed>('feed')
+      let serverFeed: Feed
+      try {
+        serverFeed = await api<Feed>('feed')
+      } catch (err) {
+        console.warn('[useFeed] Server feed unavailable, using local cache:', err)
+        serverFeed = cachedFeed || blank
+      }
 
-      if (localProjects.length > 0) {
-        const serverIds = new Set(serverFeed.projects.map(p => p.id))
-        const mergedProjects = [...serverFeed.projects]
-        for (const lp of localProjects) {
-          if (!serverIds.has(lp.id) && !serverFeed.projects.some(p => p.repoUrl === lp.repoUrl)) {
-            mergedProjects.push(lp)
-          }
-        }
-        return {
-          ...serverFeed,
-          projects: mergedProjects,
+      const serverProjectIds = new Set(serverFeed.projects.map((p) => p.id))
+      const mergedProjects: Project[] = serverFeed.projects.map(sanitizeProject)
+
+      for (const lp of localProjects) {
+        if (!serverProjectIds.has(lp.id) && !mergedProjects.some((p) => p.repoUrl === lp.repoUrl)) {
+          mergedProjects.push(sanitizeProject(lp))
         }
       }
 
-      return serverFeed
+      const serverOppIds = new Set(serverFeed.opportunities.map((o) => o.id))
+      const mergedOpps: Opportunity[] = serverFeed.opportunities.map(sanitizeOpportunity)
+
+      for (const lo of localOpps) {
+        if (!serverOppIds.has(lo.id) && !mergedOpps.some((o) => o.title === lo.title && o.projectId === lo.projectId)) {
+          mergedOpps.push(sanitizeOpportunity(lo))
+        }
+      }
+
+      const combined: Feed = {
+        ...serverFeed,
+        projects: mergedProjects,
+        opportunities: mergedOpps,
+      }
+
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('contribchain.cached_feed', JSON.stringify(combined))
+        }
+      } catch {}
+
+      return combined
     },
     refetchInterval: 15000,
     staleTime: 10000,

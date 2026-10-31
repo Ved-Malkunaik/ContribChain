@@ -99,8 +99,24 @@ export default function NewProjectPage() {
       const res = await api<{ completed: boolean; project?: any }>('projects/prepare', formData, address)
       if (res.project) {
         try {
+          const techArray = Array.isArray(res.project.technologies)
+            ? res.project.technologies
+            : typeof res.project.technologies === 'string'
+            ? (() => {
+                try {
+                  const p = JSON.parse(res.project.technologies)
+                  return Array.isArray(p) ? p : [res.project.technologies]
+                } catch {
+                  return res.project.technologies.split(',').map((s: string) => s.trim()).filter(Boolean)
+                }
+              })()
+            : formData.technologies.split(',').map((s) => s.trim()).filter(Boolean)
+          const normalized = {
+            ...res.project,
+            technologies: techArray,
+          }
           const stored = JSON.parse(localStorage.getItem('contribchain.projects') || '[]')
-          const updated = [res.project, ...stored.filter((p: any) => p.id !== res.project.id && p.repoUrl !== res.project.repoUrl)]
+          const updated = [normalized, ...stored.filter((p: any) => p.id !== normalized.id && p.repoUrl !== normalized.repoUrl)]
           localStorage.setItem('contribchain.projects', JSON.stringify(updated))
         } catch {}
       }
