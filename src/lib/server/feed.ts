@@ -122,19 +122,31 @@ export async function feed() {
     'uniswap v4 periphery & hooks',
     'chainlink functions web3 toolkit',
     'safe account modules',
+    'test dapp',
   ])
-  const mockProjectIds = new Set(['proj-1', 'proj-2', 'proj-3'])
+  const mockProjectIds = new Set(['proj-1', 'proj-2', 'proj-3', 'cmvc9booi00017aw0yi9ytmcr'])
   const mockOppTitles = new Set([
     'refactor ui components & state management',
     'enhance poll analytics & export',
     'gas-optimized twap hook with dynamic tick intervals',
     'cross-chain state proof verifier with ccip callback',
+    'change the ui/ux',
+    'stellarpoll feature #1',
+    'stellarpoll feature #2',
+    'stellarpoll feature #3',
+    'stellarpoll feature #4',
+    'stellarpoll feature #5',
+    'stellarpoll feature #6',
+    'stellarpoll feature #7',
   ])
-  const mockOppIds = new Set(['opp-1', 'opp-2'])
+  const mockOppIds = new Set([
+    'opp-1', 'opp-2', '60405f67-d042-40da-b3e9-90b96a4a3173',
+    'onchain-opp-1', 'onchain-opp-2', 'onchain-opp-3', 'onchain-opp-4', 'onchain-opp-5', 'onchain-opp-6', 'onchain-opp-7',
+  ])
 
   empty.projects = mappedProjects.filter(p => !mockProjectIds.has(p.id) && !mockProjectNames.has(p.name.toLowerCase().trim()))
-  empty.opportunities = mappedOpps.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()))
-  empty.submissions = mappedSubs
+  empty.opportunities = mappedOpps.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()) && (!o.onChainId || o.onChainId >= 8))
+  empty.submissions = mappedSubs.filter(s => (!s.onChainId || s.onChainId >= 5) && !mockOppIds.has(s.opportunityId))
 
   // 2. Synchronize with live MST Testnet escrow contract if configured
   if (configured) {
@@ -184,7 +196,8 @@ export async function feed() {
     const defaultProject = empty.projects.find(p => p.name === 'StellarPoll' || p.repoUrl.includes('StellarPoll')) || empty.projects[0]
     const defaultProjectId = defaultProject?.id || 'a20e3399-e403-4c28-8699-6987885a6b47'
 
-    for (let i = 1n; i < nextOppId; i++) {
+    const initialOppId = 8n
+    for (let i = initialOppId; i < nextOppId; i++) {
       try {
         const onChain = await chainClient.readContract({
           address: chainConfig(),
@@ -308,7 +321,8 @@ export async function feed() {
       } catch {}
     }
 
-    for (let j = 1n; j < nextContribId; j++) {
+    const initialContribId = 5n
+    for (let j = initialContribId; j < nextContribId; j++) {
       try {
         const c = await chainClient.readContract({
           address: chainConfig(),
@@ -506,7 +520,8 @@ export async function feed() {
   }
 
   empty.projects = empty.projects.filter(p => !mockProjectIds.has(p.id) && !mockProjectNames.has(p.name.toLowerCase().trim()))
-  empty.opportunities = empty.opportunities.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()))
+  empty.opportunities = empty.opportunities.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()) && (!o.onChainId || o.onChainId >= 8))
+  empty.submissions = empty.submissions.filter(s => (!s.onChainId || s.onChainId >= 5) && !mockOppIds.has(s.opportunityId))
 
   // 3. Compute stats
   for (const p of empty.projects) {

@@ -44,7 +44,32 @@ export async function api<T = Record<string, unknown>>(path: string, body?: unkn
 export function useFeed() {
   const query = useQuery({
     queryKey: ['platform-feed'],
-    queryFn: () => api<Feed>('feed'),
+    queryFn: async () => {
+      let localProjects: Project[] = []
+      try {
+        if (typeof window !== 'undefined') {
+          localProjects = JSON.parse(localStorage.getItem('contribchain.projects') || '[]')
+        }
+      } catch {}
+
+      const serverFeed = await api<Feed>('feed')
+
+      if (localProjects.length > 0) {
+        const serverIds = new Set(serverFeed.projects.map(p => p.id))
+        const mergedProjects = [...serverFeed.projects]
+        for (const lp of localProjects) {
+          if (!serverIds.has(lp.id) && !serverFeed.projects.some(p => p.repoUrl === lp.repoUrl)) {
+            mergedProjects.push(lp)
+          }
+        }
+        return {
+          ...serverFeed,
+          projects: mergedProjects,
+        }
+      }
+
+      return serverFeed
+    },
     refetchInterval: 15000,
     staleTime: 10000,
   })

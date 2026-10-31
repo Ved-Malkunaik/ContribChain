@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowUpRight, CheckCircle2, LockKeyhole } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, LockKeyhole, RotateCw } from 'lucide-react'
 import { EmptyState, StatusBadge } from '@/components/ui/AppUI'
 import { explorerUrl, currencySymbol } from '@/lib/contract'
 
@@ -73,8 +73,10 @@ export function PublisherActions({
             (s.onChainId && String(s.onChainId) === String(o.selectedSubmissionId)) ||
             (s.verifiedRecordId && s.verifiedRecordId === o.selectedSubmissionId) ||
             (o.onChainId && s.opportunityId === String(o.onChainId)) ||
-            s.opportunityId === o.id
-        )
+            s.opportunityId === o.id ||
+            (o.selectedSubmissionId && s.onChainId === Number(o.selectedSubmissionId))
+        ) || (o.state === 'Approved' ? submissions.find(s => s.status === 'Approved' && (s.opportunityId === o.id || (o.onChainId && s.opportunityId === String(o.onChainId)))) : undefined)
+        || submissions.find(s => s.opportunityId === o.id || (o.onChainId && s.opportunityId === String(o.onChainId)))
         if (o.state === 'Paid' || sub?.payoutTxHash) {
           return (
             <article key={o.id} className="cc-receipt">
@@ -179,25 +181,33 @@ export function PublisherActions({
                   </p>
                 )}
                 <div className="cc-inline mt-5">
-                  {sub?.verifiedRecordId &&
-                    (demo ? (
-                      sub.prState !== 'merged' && (
-                        <button disabled={merging || tx.busy} className="cc-btn cc-btn-secondary" onClick={() => void simulateMerge(sub.verifiedRecordId!)}>
-                          {merging ? 'Simulating…' : 'Simulate PR merge (demo)'}
-                        </button>
-                      )
-                    ) : (
-                      <button
-                        className="cc-btn cc-btn-secondary"
-                        onClick={() =>
-                          void api('pr/refresh', { id: sub.verifiedRecordId }, address)
-                            .then(() => cache.invalidateQueries({ queryKey: ['platform-feed'] }))
-                            .catch(error => setActionError(error instanceof Error ? error.message : 'PR refresh failed'))
-                        }
-                      >
-                        Refresh PR
+                  {demo ? (
+                    sub?.verifiedRecordId && sub.prState !== 'merged' && (
+                      <button disabled={merging || tx.busy} className="cc-btn cc-btn-secondary" onClick={() => void simulateMerge(sub.verifiedRecordId!)}>
+                        {merging ? 'Simulating…' : 'Simulate PR merge (demo)'}
                       </button>
-                    ))}
+                    )
+                  ) : (
+                    <button
+                      className="cc-btn cc-btn-secondary"
+                      disabled={tx.busy}
+                      onClick={() => {
+                        const targetId = sub?.verifiedRecordId || sub?.id || (sub?.onChainId ? String(sub.onChainId) : o.onChainId ? String(o.onChainId) : undefined)
+                        if (targetId) {
+                          api('pr/refresh', { id: targetId }, address)
+                            .then(() => cache.invalidateQueries({ queryKey: ['platform-feed'] }))
+                            .catch(error => setActionError(error instanceof Error ? error.message : 'PR sync failed'))
+                        } else {
+                          api('sync', {}, address)
+                            .then(() => cache.invalidateQueries({ queryKey: ['platform-feed'] }))
+                            .catch(error => setActionError(error instanceof Error ? error.message : 'Sync failed'))
+                        }
+                      }}
+                    >
+                      <RotateCw className="w-3.5 h-3.5" />
+                      Check GitHub PR merge status
+                    </button>
+                  )}
                 </div>
               </>
             )}

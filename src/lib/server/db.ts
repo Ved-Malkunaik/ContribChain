@@ -3,9 +3,17 @@ import { PrismaLibSQL } from '@prisma/adapter-libsql'
 import { createClient } from '@libsql/client'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { createRequire } from 'node:module'
 import { SCHEMA_STATEMENTS } from './schema-sql'
 import { resolveDatabaseConfig } from './database-config'
+
+let DatabaseSyncClass: any = null
+try {
+  const req = createRequire(import.meta.url)
+  DatabaseSyncClass = req('node:sqlite')?.DatabaseSync
+} catch {
+  // node:sqlite is not available on some runtimes
+}
 
 function getFilePathFromUrl(url: string): string {
   const withoutFile = url.replace(/^file:(?:\/\/)?/, '')
@@ -19,38 +27,44 @@ function getFilePathFromUrl(url: string): string {
 }
 
 function ensureLocalDatabaseInitialized(url: string) {
-  const dbPath = getFilePathFromUrl(url)
-  const dir = dirname(dbPath)
-  if (!existsSync(/*turbopackIgnore: true*/ dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
-
-  let needsSchema = !existsSync(/*turbopackIgnore: true*/ dbPath)
-  if (!needsSchema) {
-    try {
-      const checkSqlite = new DatabaseSync(dbPath)
-      const row = checkSqlite
-        .prepare("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name='Checkpoint'")
-        .get() as { count: number } | undefined
-      checkSqlite.close()
-      needsSchema = !row || row.count === 0
-    } catch {
-      needsSchema = true
-    }
-  }
-
-  if (!needsSchema) return
-  const sqlite = new DatabaseSync(dbPath)
   try {
-    for (const statement of SCHEMA_STATEMENTS) {
+    const dbPath = getFilePathFromUrl(url)
+    const dir = dirname(dbPath)
+    if (!existsSync(/*turbopackIgnore: true*/ dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+
+    if (!DatabaseSyncClass) return
+
+    let needsSchema = !existsSync(/*turbopackIgnore: true*/ dbPath)
+    if (!needsSchema) {
       try {
-        sqlite.exec(statement)
+        const checkSqlite = new DatabaseSyncClass(dbPath)
+        const row = checkSqlite
+          .prepare("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name='Checkpoint'")
+          .get() as { count: number } | undefined
+        checkSqlite.close()
+        needsSchema = !row || row.count === 0
       } catch {
-        // Existing indexes or columns are expected during idempotent local setup.
+        needsSchema = true
       }
     }
-  } finally {
-    sqlite.close()
+
+    if (!needsSchema) return
+    const sqlite = new DatabaseSyncClass(dbPath)
+    try {
+      for (const statement of SCHEMA_STATEMENTS) {
+        try {
+          sqlite.exec(statement)
+        } catch {
+          // Existing indexes or columns are expected during idempotent local setup.
+        }
+      }
+    } finally {
+      sqlite.close()
+    }
+  } catch (err) {
+    console.warn('[db] local database init notice:', err)
   }
 }
 
@@ -61,6 +75,8 @@ async function ensureLibsqlSchema(url: string, authToken: string) {
   const client = createClient({ url, authToken })
   try {
     await client.executeMultiple(`${schemaStatements.join(';\n')};`)
+  } catch (err) {
+    console.warn('[db] libsql schema notice:', err)
   } finally {
     client.close()
   }

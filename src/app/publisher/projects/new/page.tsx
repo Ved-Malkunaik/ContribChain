@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { api, useTransaction } from '@/lib/use-platform'
 import { IdentityPanel, FeedStatus, TransactionStatus } from '@/components/PlatformStatus'
 
-import { useAccount } from 'wagmi'
+import { useAccount, useSignMessage } from 'wagmi'
+import { useQueryClient } from '@tanstack/react-query'
 import { contractAddress } from '@/lib/contract'
 import {
   ArrowLeft,
@@ -20,8 +21,10 @@ import { PageHeader } from '@/components/ui/AppUI'
 
 export default function NewProjectPage() {
   const router = useRouter()
-  const tx=useTransaction()
+  const tx = useTransaction()
+  const cache = useQueryClient()
   const { isConnected, address } = useAccount()
+  const { signMessageAsync } = useSignMessage()
 
   const [formData, setFormData] = useState({
     name: '',
@@ -94,11 +97,28 @@ export default function NewProjectPage() {
     setIsSubmitting(true)
     setSubmitError('')
     try {
-      if (contractAddress) {
-        await tx.send('projects/prepare', formData)
-      } else {
-        await api('projects/prepare', formData, address)
+      let signature = ''
+      if (address) {
+        try {
+          signature = await signMessageAsync({
+            message: `ContribChain: Register Project\n\nName: ${formData.name}\nRepository: ${formData.repoUrl}\nPublisher: ${address}`,
+          })
+        } catch (sigErr) {
+          if (sigErr instanceof Error && (sigErr.message.includes('rejected') || sigErr.message.includes('denied'))) {
+            throw new Error('Wallet signature is required to register and anchor the project.')
+          }
+        }
       }
+
+      const res = await api<{ completed: boolean; project?: any }>('projects/prepare', { ...formData, signature }, address)
+      if (res.project) {
+        try {
+          const stored = JSON.parse(localStorage.getItem('contribchain.projects') || '[]')
+          const updated = [res.project, ...stored.filter((p: any) => p.id !== res.project.id && p.repoUrl !== res.project.repoUrl)]
+          localStorage.setItem('contribchain.projects', JSON.stringify(updated))
+        } catch {}
+      }
+      await cache.invalidateQueries({ queryKey: ['platform-feed'] })
       setSuccess(true)
     } catch (err: unknown) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to register project')

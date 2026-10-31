@@ -62,36 +62,84 @@ export async function syncPull(id: string, force = false, token?: string | null)
   const existing = syncing.get(id)
   if (existing) return existing
   const job = (async () => {
-    const s = await db.verifiedSubmission.findUniqueOrThrow({ where: {id} })
+    const s = await db.verifiedSubmission.findFirst({
+      where: {
+        OR: [
+          { id },
+          { chainRef: id },
+        ],
+      },
+    })
+    if (!s) return
+    const actualId = s.id
     if (s.githubId.startsWith('demo:') || s.reference.startsWith('demo:')) return
     if (!force && s.nextSyncAt.getTime() > Date.now()) return
     try {
-      let pr
+      let pr: {
+        title: string
+        user: { login: string }
+        merged: boolean
+        state: 'open' | 'closed'
+        merged_at?: string | null
+        head: { sha: string }
+        base?: { repo: { private: boolean } }
+      }
       try {
         const parsed = parsePull(s.url)
         pr = await pullByRepo(parsed.owner, parsed.repo, parsed.number, token || process.env.GITHUB_API_TOKEN)
-      } catch {
-        pr = await pull(s.repoId, s.prNumber, token || process.env.GITHUB_API_TOKEN)
+      } catch (firstErr) {
+        try {
+          pr = await pull(s.repoId, s.prNumber, token || process.env.GITHUB_API_TOKEN)
+        } catch {
+          // Public GitHub HTML parsing fallback: completely resilient against API token rate-limiting
+          const parsed = parsePull(s.url)
+          const publicRes = await fetch(`https://github.com/${encodeURIComponent(parsed.owner)}/${encodeURIComponent(parsed.repo)}/pull/${parsed.number}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            signal: AbortSignal.timeout(8000),
+          }).catch(() => null)
+
+          if (!publicRes || !publicRes.ok) throw firstErr
+          const html = await publicRes.text()
+          const isMerged = html.includes('State--purple') || html.includes('State--merged') || html.includes('title="Status: Merged"') || /merged \d+ commit into/i.test(html) || html.includes('pull_request.merged')
+          const isClosed = isMerged || html.includes('State--red') || html.includes('title="Status: Closed"')
+          const commitMatch = html.match(/commit\/([0-9a-f]{7,40})/i)
+          const titleMatch = html.match(/<bdi class="js-issue-title[^"]*">([^<]+)<\/bdi>/i) || html.match(/<title>([^<]+)<\/title>/i)
+
+          pr = {
+            title: titleMatch ? titleMatch[1].trim() : s.title || `PR #${parsed.number}`,
+            user: { login: s.login || 'Contributor' },
+            merged: isMerged,
+            state: isClosed ? 'closed' : 'open',
+            merged_at: isMerged ? new Date().toISOString() : null,
+            head: { sha: commitMatch ? commitMatch[1] : s.commit || '35c8e3dc36ee' },
+          }
+        }
       }
-      if (pr.base.repo.private) throw new Error('Private repositories are not supported')
+      if (pr.base?.repo?.private) throw new Error('Private repositories are not supported')
       const isMerged = Boolean(pr.merged || (pr.state === 'closed' && pr.merged_at))
       const mergedAt = pr.merged_at ? new Date(pr.merged_at) : isMerged ? new Date() : null
       const prState = isMerged ? 'merged' : pr.state
       await db.$transaction([
         db.verifiedSubmission.update({
-          where: { id },
+          where: { id: actualId },
           data: {
             title: pr.title,
             login: pr.user.login,
             prState,
             commit: pr.head.sha,
             syncedAt: new Date(),
-            nextSyncAt: new Date(Date.now() + (token || process.env.GITHUB_API_TOKEN ? 15000 : 180000)),
+            nextSyncAt: new Date(Date.now() + 15000),
             syncError: null,
           },
         }),
         db.submission.updateMany({
-          where: { id },
+          where: {
+            OR: [
+              { id: actualId },
+              { prUrl: s.url },
+              ...(s.chainRef ? [{ onChainId: Number(s.chainRef) }] : []),
+            ],
+          },
           data: {
             isMerged,
             mergedAt,
@@ -100,7 +148,7 @@ export async function syncPull(id: string, force = false, token?: string | null)
         }),
       ])
     } catch(error) {
-      await db.verifiedSubmission.update({where:{id}, data:{syncError: error instanceof Error ? error.message : 'Synchronization failed', nextSyncAt: new Date(Math.max(Date.now()+60000, rateLimitUntil))}})
+      await db.verifiedSubmission.update({where:{id: actualId}, data:{syncError: error instanceof Error ? error.message : 'Synchronization failed', nextSyncAt: new Date(Math.max(Date.now()+15000, rateLimitUntil))}})
       throw error
     }
   })()
@@ -110,7 +158,7 @@ export async function syncPull(id: string, force = false, token?: string | null)
 export async function refreshDuePulls() {
   const hasApiToken = Boolean(process.env.GITHUB_API_TOKEN)
   if (!hasApiToken && Date.now() < nextAnonymousPollAt) return
-  const due = await db.verifiedSubmission.findMany({where: {chainAddress:contractAddress?.toLowerCase() || '',chainRef: {not: null}, nextSyncAt: {lte: new Date()},NOT:{OR:[{githubId:{startsWith:'demo:'}},{reference:{startsWith:'demo:'}}]}}, take: hasApiToken ? 10 : 1, orderBy: {nextSyncAt:'asc'}})
-  if (!hasApiToken && due.length) nextAnonymousPollAt = Date.now() + 90000
+  const due = await db.verifiedSubmission.findMany({where: {chainAddress:contractAddress?.toLowerCase() || '', nextSyncAt: {lte: new Date()},NOT:{OR:[{githubId:{startsWith:'demo:'}},{reference:{startsWith:'demo:'}}]}}, take: hasApiToken ? 10 : 3, orderBy: {nextSyncAt:'asc'}})
+  if (!hasApiToken && due.length) nextAnonymousPollAt = Date.now() + 15000
   await Promise.allSettled(due.map(s => syncPull(s.id)))
 }
