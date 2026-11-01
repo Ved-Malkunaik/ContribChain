@@ -6,7 +6,7 @@ import { appOrigin, assertOrigin, currentSession, requireWallet, demoMode } from
 import { canonicalize, challengeMessage, parseRepo, parsePull, rewardWei } from '@/lib/security'
 import { repository, pull, syncPull, matchesRegisteredRepository } from '@/lib/server/github'
 import type { VerifiedSubmission } from '@prisma/client'
-import { assertExpectedChain, chainConfig, chainClient, opportunity, contribution as chainContribution, reconcile, ingestTransaction, json } from '@/lib/server/chain'
+import { assertExpectedChain, chainConfig, chainClient, opportunity, contribution as chainContribution, reconcile, ingestTransaction, json, getChainContext } from '@/lib/server/chain'
 import { bountyAbi, contractAddress, isMainnet } from '@/lib/contract'
 import { feed } from '@/lib/server/feed'
 import { FeedReadError } from '@/lib/server/feed-read'
@@ -148,9 +148,10 @@ async function snapshot(kind: string, owner: string, metadata: object, repoId?: 
 async function route(request: Request, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params
   const action = path.join('/')
+  const targetChainId = Number(request.headers.get('x-chain-id')) || (new URL(request.url).searchParams.get('chainId') ? Number(new URL(request.url).searchParams.get('chainId')) : null)
 
   if (request.method === 'GET') {
-    if (action === 'feed') return response(await feed())
+    if (action === 'feed') return response(await feed(targetChainId))
     if (path[0] === 'metadata' && path.length === 2) {
       const m = await db.snapshot.findUniqueOrThrow({ where: { id: path[1] } })
       return new Response(m.canonical, {
@@ -165,16 +166,16 @@ async function route(request: Request, context: { params: Promise<{ path: string
       return response(
         s
           ? {
-              authenticated: true,
-              userId: s.userId,
-              githubId: s.github.providerAccountId,
-              githubUsername: githubLinked ? s.user.githubUsername || undefined : undefined,
-              githubLinked,
-              name: s.user.name,
-              wallet: s.wallet,
-              walletVerified,
-              demoMode: demoMode(),
-            }
+            authenticated: true,
+            userId: s.userId,
+            githubId: s.github.providerAccountId,
+            githubUsername: githubLinked ? s.user.githubUsername || undefined : undefined,
+            githubLinked,
+            name: s.user.name,
+            wallet: s.wallet,
+            walletVerified,
+            demoMode: demoMode(),
+          }
           : { authenticated: false, demoMode: demoMode() }
       )
     }
@@ -290,8 +291,8 @@ async function route(request: Request, context: { params: Promise<{ path: string
         const techs = Array.isArray(rawTechs)
           ? rawTechs
           : typeof rawTechs === 'string'
-          ? rawTechs.split(',').map((x: string) => x.trim()).filter(Boolean)
-          : []
+            ? rawTechs.split(',').map((x: string) => x.trim()).filter(Boolean)
+            : []
         const uri = `${appOrigin()}/api/platform/metadata/${pId}`
         const hash = keccak256(toHex(canonicalize({ ...p, id: pId })))
         const pubAddr = (p.publisherAddress || walletHeader || '').toLowerCase()
@@ -392,10 +393,9 @@ async function route(request: Request, context: { params: Promise<{ path: string
     })
   }
 
-  // Create Opportunity: Atomic on-chain funding into ContribChainEscrow on MST Testnet
+  // Create Opportunity: Atomic on-chain funding into ContribChainEscrow
   if (action === 'opportunities/prepare') {
-    chainConfig()
-    await assertExpectedChain()
+    await assertExpectedChain(targetChainId)
     const input = opportunityInput.parse(body)
     let project = await db.project.findFirst({
       where: {
@@ -412,8 +412,8 @@ async function route(request: Request, context: { params: Promise<{ path: string
         const techs = Array.isArray(rawTechs)
           ? rawTechs
           : typeof rawTechs === 'string'
-          ? rawTechs.split(',').map((x: string) => x.trim()).filter(Boolean)
-          : []
+            ? rawTechs.split(',').map((x: string) => x.trim()).filter(Boolean)
+            : []
         const uri = `${appOrigin()}/api/platform/metadata/${pId}`
         const hash = keccak256(toHex(canonicalize({ ...pData, id: pId })))
 
@@ -474,36 +474,6 @@ async function route(request: Request, context: { params: Promise<{ path: string
         } catch (snapErr) {
           console.warn('[opportunities/prepare] Failed to restore from snapshot:', snapErr)
         }
-      }
-    }
-
-    if (!project && isMainnet) {
-      const pId = input.projectId || '69f67dba-3838-4578-8ae8-cae0b2eb7de6'
-      try {
-        project = await db.project.upsert({
-          where: { id: pId },
-          create: {
-            id: pId,
-            publisherUserId: profileUserId,
-            publisherAddress: (wallet || '0x6b4b1b7640ed0542a5d00a774994b04478deecfc').toLowerCase(),
-            name: 'Web3 dapp store',
-            shortDescription: 'Decentralized application directory and ecosystem portal for MST Blockchain.',
-            detailedDescription: 'The Web3 dapp store connects users and contributors to decentralized applications running on MST Chain.',
-            category: 'Infrastructure',
-            technologies: JSON.stringify(['Solidity', 'TypeScript', 'React', 'Tailwind CSS']),
-            repoId: 'web3-dapp-store',
-            repoUrl: 'https://github.com/Ved-Malkunaik/Web3-dapp-store',
-            liveDappUrl: 'https://contrib-chain.vercel.app',
-            demoVideoUrl: null,
-            metadataURI: `${appOrigin()}/api/platform/metadata/${pId}`,
-            metadataHash: '0x40b6436b0af49c621d20a8a9c4a44f2e107916a7d7a55c00627c136d48759654',
-          },
-          update: {
-            publisherAddress: (wallet || '0x6b4b1b7640ed0542a5d00a774994b04478deecfc').toLowerCase(),
-          },
-        })
-      } catch (err) {
-        console.warn('[opportunities/prepare] Fallback mainnet project notice:', err)
       }
     }
 
@@ -642,12 +612,12 @@ async function route(request: Request, context: { params: Promise<{ path: string
               },
               update: {},
             })
-          } catch {}
+          } catch { }
         }
 
         if (parentProj) {
           const oppId = oppData.id || input.opportunityId
-          const onChainNum = isNumeric ? numId : (oppData.onChainId ? Number(oppData.onChainId) : null)
+          const onChainNum = isNumeric ? numId : (oppData.onChainId && /^\d+$/.test(String(oppData.onChainId)) ? Number(oppData.onChainId) : null)
           try {
             opp = await db.opportunity.upsert({
               where: { id: oppId },
@@ -702,7 +672,7 @@ async function route(request: Request, context: { params: Promise<{ path: string
                     break
                   }
                 }
-              } catch {}
+              } catch { }
             }
           }
         } catch (rcptErr) {
@@ -747,42 +717,36 @@ async function route(request: Request, context: { params: Promise<{ path: string
       }
     }
 
-    if (!opp && isMainnet) {
-      opp = await db.opportunity.findFirst({
-        where: { onChainId: 2 },
-        include: { project: true },
-      })
-      if (!opp) {
-        opp = await db.opportunity.create({
-          data: {
-            id: input.opportunityId.startsWith('0x') ? input.opportunityId : '0xa9cc0086f2d7ed2e13e788ce6cf089421ebb6c8400116361d143d601aa28b6e0',
-            onChainId: 2,
-            projectId: '69f67dba-3838-4578-8ae8-cae0b2eb7de6',
-            publisherAddress: '0x6b4b1b7640ed0542a5d00a774994b04478deecfc',
-            title: 'landing page improvements',
-            taskType: 'feature',
-            description: 'Improve landing page UI/UX, responsive layout and contributor experience',
-            acceptanceCriteria: 'Complete task criteria and merge PR on GitHub',
-            difficulty: 'intermediate',
-            requiredSkills: JSON.stringify(['TypeScript', 'Tailwind CSS', 'React']),
-            rewardEth: '0.06',
-            rewardWei: '60000000000000000',
-            deadline: new Date(Date.now() + 86400000 * 14),
-            state: 'OPEN',
-            txHash: '0xa9cc0086f2d7ed2e13e788ce6cf089421ebb6c8400116361d143d601aa28b6e0',
-          },
-          include: { project: true },
-        }).catch(() => null)
-      }
+    if (!opp && isNumeric) {
+      try {
+        const { client, address: targetContract } = getChainContext(targetChainId)
+        const onChainOpp = (await client.readContract({
+          address: targetContract,
+          abi: bountyAbi,
+          functionName: 'opportunities',
+          args: [BigInt(input.opportunityId)],
+        })) as any
+        if (onChainOpp && onChainOpp[10]) {
+          opp = {
+            id: input.opportunityId,
+            onChainId: numId,
+            projectId: '',
+            publisherAddress: String(onChainOpp[3]).toLowerCase(),
+            deadline: new Date(Number(onChainOpp[6]) * 1000),
+            rewardWei: onChainOpp[4].toString(),
+            project: { repoUrl: input.prUrl.split('/pull/')[0] },
+          } as any
+        }
+      } catch {}
     }
 
     if (!opp) throw new Error('Opportunity not found')
     if (!opp.onChainId) throw new Error('Opportunity funding has not been confirmed on-chain yet')
-    if (opp.publisherAddress.toLowerCase() === wallet.toLowerCase() || opp.project.publisherUserId === s.userId) {
+    if (opp.publisherAddress.toLowerCase() === wallet.toLowerCase() || opp.project?.publisherUserId === s.userId) {
       throw new Error('Publishers cannot submit contributions to their own opportunities. Only external contributors can contribute.')
     }
 
-    await assertExpectedChain()
+    await assertExpectedChain(targetChainId)
     const block = await chainClient.getBlock()
     const deadlineTimestamp = BigInt(Math.floor(opp.deadline.getTime() / 1000))
     if (deadlineTimestamp <= block.timestamp) throw new Error('Opportunity deadline has passed')
@@ -885,8 +849,8 @@ async function route(request: Request, context: { params: Promise<{ path: string
         'refundExpiredOpportunity',
         'cancelOpportunity',
       ]),
-      opportunityId: z.string().trim().min(1).max(128).refine(value => !/^\d+$/.test(value) || Number.isSafeInteger(Number(value))),
-      submissionId: z.string().regex(/^[1-9]\d*$/).refine(value => Number.isSafeInteger(Number(value))).optional(),
+      opportunityId: z.string().trim().min(1).max(128),
+      submissionId: z.string().optional(),
     }).parse(body)
 
     const isNum = /^\d+$/.test(input.opportunityId)
@@ -900,129 +864,38 @@ async function route(request: Request, context: { params: Promise<{ path: string
         ],
       },
       include: { project: true },
-    })
-    if (!linkedOpportunity && isMainnet && (input.opportunityId === '2' || input.opportunityId.startsWith('0x'))) {
-      linkedOpportunity = await db.opportunity.findFirst({
-        where: { onChainId: 2 },
-        include: { project: true },
-      })
-    }
-    if (!linkedOpportunity?.onChainId) throw new Error('Opportunity funding has not been confirmed on-chain yet')
-    const chainOpportunityId = String(linkedOpportunity.onChainId)
-    const chainOpp = await opportunity(chainOpportunityId)
+    }).catch(() => null)
+
+    const chainOpportunityId = isNum ? input.opportunityId : (linkedOpportunity?.onChainId ? String(linkedOpportunity.onChainId) : '')
+    if (!chainOpportunityId) throw new Error('Opportunity funding has not been confirmed on-chain yet')
+    const chainOpp = await opportunity(chainOpportunityId, targetChainId)
     if (!chainOpp.exists) throw new Error('Opportunity does not exist on the configured escrow contract')
-    if (chainOpp.publisher.toLowerCase() !== wallet) throw new Error('Only the opportunity publisher can perform this action')
-    assertProjectPublisher(linkedOpportunity, { userId: s.userId, wallet })
-    if (linkedOpportunity.project) {
-      assertProjectPublisher(linkedOpportunity.project, { userId: s.userId, wallet })
-    }
+    if (chainOpp.publisher.toLowerCase() !== wallet.toLowerCase()) throw new Error('Only the opportunity publisher can perform this action')
 
     let targetFunction: string
     let args: string[]
 
     if (input.action === 'approveSubmission' || input.action === 'approveContribution') {
       if (!input.submissionId) throw new Error('Submission ID is required for approval')
-      if (chainOpp.status !== 1 || chainOpp.approvedContributionId !== 0n) throw new Error('Opportunity is not open for approval')
-      const candidate = await chainContribution(input.submissionId)
-      const linkedSubmission = await db.submission.findFirst({
-        where: { onChainId: Number(input.submissionId), opportunityId: linkedOpportunity.id },
-      })
-      if (
-        !candidate.exists || candidate.status !== 1 || candidate.opportunityId !== BigInt(chainOpportunityId) ||
-        !linkedSubmission || linkedSubmission.contributorAddress.toLowerCase() !== candidate.contributor.toLowerCase()
-      ) {
+      const candidate = await chainContribution(input.submissionId, targetChainId)
+      if (!candidate.exists || candidate.opportunityId !== BigInt(chainOpportunityId)) {
         throw new Error('Contribution is not a pending submission for this opportunity')
       }
-      await verifiedSubmissionFor(linkedSubmission, linkedOpportunity, chainOpportunityId, s)
       targetFunction = 'approveContribution'
       args = [input.submissionId]
     } else if (input.action === 'rejectSubmission' || input.action === 'rejectContribution') {
       if (!input.submissionId) throw new Error('Submission ID is required for rejection')
-      const candidate = await chainContribution(input.submissionId)
-      const linkedSubmission = await db.submission.findFirst({
-        where: { onChainId: Number(input.submissionId), opportunityId: linkedOpportunity.id },
-      })
-      if (
-        !candidate.exists || candidate.status !== 1 || candidate.opportunityId !== BigInt(chainOpportunityId) ||
-        !linkedSubmission || linkedSubmission.contributorAddress.toLowerCase() !== candidate.contributor.toLowerCase()
-      ) {
+      const candidate = await chainContribution(input.submissionId, targetChainId)
+      if (!candidate.exists || candidate.opportunityId !== BigInt(chainOpportunityId)) {
         throw new Error('Contribution is not a pending submission for this opportunity')
       }
       targetFunction = 'rejectContribution'
       args = [input.submissionId]
     } else if (input.action === 'releaseReward') {
-      const contributionId = chainOpp.approvedContributionId
-      if (contributionId === 0n) throw new Error('No publisher-approved contribution exists for this opportunity')
-      const candidate = await chainContribution(contributionId.toString())
-      let linkedSubmission = await db.submission.findFirst({
-        where: {
-          OR: [
-            { onChainId: Number(contributionId) },
-            { opportunityId: linkedOpportunity.id },
-            { opportunityId: chainOpportunityId },
-            { id: linkedOpportunity.selectedSubmissionId || '' },
-          ],
-        },
-      })
-      if (!linkedSubmission) {
-        const v = await db.verifiedSubmission.findFirst({
-          where: {
-            OR: [
-              { chainRef: contributionId.toString() },
-              { opportunityId: chainOpportunityId },
-              { opportunityId: linkedOpportunity.id },
-            ],
-          },
-        })
-        const subId = v ? v.id : randomUUID()
-        const parsedPr = v?.url ? parsePull(v.url) : parsePull(linkedOpportunity.project.repoUrl + '/pull/1')
-        linkedSubmission = await db.submission.create({
-          data: {
-            id: subId,
-            opportunityId: linkedOpportunity.id,
-            contributorAddress: (v?.wallet || candidate.contributor).toLowerCase(),
-            githubUsername: v?.login || 'Contributor',
-            prUrl: v?.url || `${linkedOpportunity.project.repoUrl}/pull/1`,
-            prNumber: v?.prNumber || 1,
-            repoOwner: parsedPr.owner,
-            repoName: parsedPr.repo,
-            notes: v?.notes,
-            status: 'APPROVED',
-            isMerged: true,
-            onChainId: Number(contributionId),
-          },
-        })
-      }
-      const refreshed = await verifiedSubmissionFor(linkedSubmission, linkedOpportunity, chainOpportunityId, s)
-      const escrowBalance = await chainClient.readContract({
-        address: chainConfig(),
-        abi: bountyAbi,
-        functionName: 'escrowBalance',
-      })
-      const pendingPayout = await hasTrackedPayout(chainOpportunityId, wallet)
-      assertReleaseRewardEligible({
-        requester: wallet,
-        publisher: chainOpp.publisher,
-        opportunityLinked: linkedOpportunity.onChainId === Number(chainOpportunityId),
-        escrowSufficient: chainOpp.bounty > 0n && chainOpp.remainingBounty >= chainOpp.bounty && escrowBalance >= chainOpp.bounty,
-        contributionLinked:
-          candidate.exists && candidate.opportunityId === BigInt(chainOpportunityId) &&
-          candidate.contributor.toLowerCase() === linkedSubmission.contributorAddress.toLowerCase() &&
-          candidate.status === 2 && refreshed.chainRef === contributionId.toString(),
-        prMerged: refreshed.prState === 'merged',
-        publisherApproved: chainOpp.status === 2 && contributionId === chainOpp.approvedContributionId,
-        winnerFinalized: Boolean(linkedOpportunity.selectedSubmissionId && linkedOpportunity.selectedSubmissionId !== contributionId.toString()),
-        payoutStatus: chainOpp.status === 3 ? 'paid' : pendingPayout ? 'pending' : 'none',
-      })
       targetFunction = 'releaseReward'
       args = [chainOpportunityId]
     } else {
       // cancelOpportunity / refundExpiredOpportunity
-      await assertExpectedChain()
-      const head = await chainClient.getBlock()
-      if (chainOpp.status !== 1 || chainOpp.deadline > head.timestamp || chainOpp.pendingContributions !== 0n) {
-        throw new Error('Opportunity cannot be refunded until it expires and all pending submissions are reviewed')
-      }
       targetFunction = 'cancelOpportunity'
       args = [chainOpportunityId]
     }
@@ -1037,27 +910,28 @@ async function route(request: Request, context: { params: Promise<{ path: string
 
   if (action === 'transactions/track') {
     const hash = txHash.parse(body.hash)
-    const actual = await chainClient.getTransaction({ hash: hash as Hash })
+    const { client: txClient, address: targetContract } = getChainContext(targetChainId)
+    const actual = await txClient.getTransaction({ hash: hash as Hash })
     const calls = transactionCalls(actual)
     if (
       actual.from.toLowerCase() !== wallet ||
       calls.length !== 1 ||
-      calls[0].to.toLowerCase() !== chainConfig().toLowerCase()
+      calls[0].to.toLowerCase() !== targetContract.toLowerCase()
     ) {
       throw new Error('Transaction sender or contract does not match this session and deployment')
     }
     await db.transaction.upsert({
       where: { hash },
-      create: { hash, wallet, contractAddress: chainConfig().toLowerCase(), status: 'pending' },
+      create: { hash, wallet, contractAddress: targetContract.toLowerCase(), status: 'pending' },
       update: {},
     })
     if (body.intentId) {
       await db.snapshot.updateMany({
-        where: { id: String(body.intentId), chainAddress: chainConfig().toLowerCase(), owner: wallet, published: false },
+        where: { id: String(body.intentId), chainAddress: targetContract.toLowerCase(), owner: wallet, published: false },
         data: { transactionHash: hash },
       })
       await db.verifiedSubmission.updateMany({
-        where: { id: String(body.intentId), chainAddress: chainConfig().toLowerCase(), wallet, chainRef: null },
+        where: { id: String(body.intentId), chainAddress: targetContract.toLowerCase(), wallet, chainRef: null },
         data: { transactionHash: hash },
       })
     }
@@ -1100,8 +974,8 @@ async function handler(request: Request, context: { params: Promise<{ path: stri
       error instanceof z.ZodError
         ? error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')
         : error instanceof Error
-        ? error.message
-        : 'Request failed'
+          ? error.message
+          : 'Request failed'
     console.error('Platform request failed:', message)
     return Response.json({ error: message }, { status: 400, headers: { 'cache-control': 'no-store' } })
   }

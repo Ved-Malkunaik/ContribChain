@@ -17,7 +17,7 @@ function parseList(val: unknown): string[] {
     try {
       const parsed = JSON.parse(val)
       if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String)
-    } catch {}
+    } catch { }
     return val.split(',').map((s) => s.trim()).filter(Boolean)
   }
   return []

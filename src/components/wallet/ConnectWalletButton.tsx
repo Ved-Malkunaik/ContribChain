@@ -23,7 +23,7 @@ import {
   X,
   Sparkles,
 } from 'lucide-react'
-import { activeChain, explorerUrl, currencySymbol, networkName, isMainnet } from '@/lib/contract'
+import { activeChain, explorerUrl, currencySymbol, networkName, isMainnet, getNetworkConfig, SUPPORTED_CHAIN_IDS } from '@/lib/contract'
 import { useIdentity } from '@/lib/use-platform'
 
 export function ConnectWalletButton() {
@@ -34,9 +34,13 @@ export function ConnectWalletButton() {
   const chainId = useChainId()
   const { switchChain, isPending: isSwitchPending } = useSwitchChain()
 
+  const currentNet = getNetworkConfig(chainId)
+  const isSupported = chainId === 4646 || chainId === 91562037
+  const isWrongNetwork = isConnected && !isSupported
+
   const { data: balanceData, isLoading: isBalanceLoading } = useBalance({
     address,
-    chainId: activeChain.id,
+    chainId: isSupported ? chainId : activeChain.id,
   })
 
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -47,8 +51,6 @@ export function ConnectWalletButton() {
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  const isWrongNetwork = isConnected && chainId !== activeChain.id
 
   const copyAddress = () => {
     if (address) {
@@ -64,8 +66,8 @@ export function ConnectWalletButton() {
 
   const formatBalance = () => {
     if (isBalanceLoading) return 'Loading...'
-    if (!balanceData) return `0.0000 ${currencySymbol}`
-    return `${formatEther(balanceData.value).replace(/^(\d+\.\d{4})\d*$/, '$1')} ${currencySymbol}`
+    if (!balanceData) return `0.0000 ${currentNet.currencySymbol}`
+    return `${formatEther(balanceData.value).replace(/^(\d+\.\d{4})\d*$/, '$1')} ${currentNet.currencySymbol}`
   }
 
   // Detect injected web3 wallet (BridgeKey, MetaMask, or any EIP-1193 provider)
@@ -239,7 +241,7 @@ export function ConnectWalletButton() {
         ) : (
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-xs font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>{networkName}</span>
+            <span>{currentNet.name}</span>
           </div>
         )}
 
@@ -331,14 +333,35 @@ export function ConnectWalletButton() {
 
             {/* Balance info */}
             <div className="py-3 border-b border-white/10 space-y-1">
-              <div className="text-[11px] text-neutral-400">{networkName} Balance</div>
+              <div className="text-[11px] text-neutral-400">{currentNet.name} Balance</div>
               <div className="text-base font-semibold text-white font-mono">{formatBalance()}</div>
+            </div>
+
+            {/* Network Switcher */}
+            <div className="py-2.5 border-b border-white/10">
+              <button
+                type="button"
+                disabled={isSwitchPending}
+                onClick={() => {
+                  const targetChain = currentNet.chainId === 91562037 ? 4646 : 91562037
+                  switchChain({ chainId: targetChain })
+                }}
+                className="w-full flex items-center justify-between p-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 text-xs text-neutral-300 hover:text-white transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Switch to {currentNet.chainId === 91562037 ? 'MST Mainnet' : 'MST Testnet'}</span>
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-neutral-400">
+                  {currentNet.chainId === 91562037 ? 'MSTC' : 'tMSTC'}
+                </span>
+              </button>
             </div>
 
             {/* Links and Actions */}
             <div className="pt-2 space-y-1 text-xs">
               <a
-                href={`${explorerUrl}/address/${address}`}
+                href={`${currentNet.explorerUrl}/address/${address}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-2 rounded-xl text-neutral-300 hover:text-white hover:bg-white/5 transition-colors"
@@ -350,7 +373,7 @@ export function ConnectWalletButton() {
                 <ExternalLink className="w-3 h-3 text-neutral-400" />
               </a>
 
-              {!isMainnet && (
+              {!currentNet.isMainnet && (
                 <a
                   href="https://faucet.mstblockchain.com"
                   target="_blank"

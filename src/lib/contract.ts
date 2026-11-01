@@ -39,21 +39,21 @@ export function getTestnetRpcUrl(): string {
   return 'https://testnetrpc.mstblockchain.com'
 }
 
-// Active chain resolution: defaults to MST Mainnet (Chain ID: 4646)
+// Active chain resolution: defaults to MST Testnet (Chain ID: 91562037)
 export const isMainnet =
   process.env.NEXT_PUBLIC_NETWORK === 'mainnet' ||
-  process.env.NEXT_PUBLIC_MSTC_CHAIN_ID === '4646' ||
-  process.env.NEXT_PUBLIC_MST_CHAIN_ID === '4646' ||
-  Boolean(process.env.NEXT_PUBLIC_MSTC_RPC_URL) ||
-  Boolean(process.env.MSTC_RPC_URL) ||
-  process.env.NEXT_PUBLIC_NETWORK !== 'testnet'
+  (process.env.NEXT_PUBLIC_MST_CHAIN_ID === '4646' && process.env.NEXT_PUBLIC_NETWORK !== 'testnet')
 
 export function getActiveRpcUrl(): string {
   return isMainnet ? getMainnetRpcUrl() : getTestnetRpcUrl()
 }
 
+export const MAINNET_CHAIN_ID = 4646
+export const TESTNET_CHAIN_ID = 91562037
+export const SUPPORTED_CHAIN_IDS = [MAINNET_CHAIN_ID, TESTNET_CHAIN_ID] as const
+
 export const mstTestnet = defineChain({
-  id: 91562037,
+  id: TESTNET_CHAIN_ID,
   name: 'MST Testnet',
   nativeCurrency: { name: 'tMSTC', symbol: 'tMSTC', decimals: 18 },
   rpcUrls: {
@@ -68,7 +68,7 @@ export const mstTestnet = defineChain({
 })
 
 export const mstMainnet = defineChain({
-  id: 4646,
+  id: MAINNET_CHAIN_ID,
   name: 'MST Mainnet',
   nativeCurrency: { name: 'MSTC', symbol: 'MSTC', decimals: 18 },
   rpcUrls: {
@@ -80,6 +80,49 @@ export const mstMainnet = defineChain({
     default: { name: 'MSTScan', url: 'https://mstscan.com' },
   },
 })
+
+export type NetworkConfig = {
+  chainId: number
+  chain: typeof mstMainnet | typeof mstTestnet
+  name: string
+  contractAddress: Address
+  currencySymbol: string
+  rpcUrl: string
+  explorerUrl: string
+  isMainnet: boolean
+  freshStartOppMinId: bigint
+  freshStartContribMinId: bigint
+}
+
+export function getNetworkConfig(targetChainId?: number | null): NetworkConfig {
+  const isNetTestnet = targetChainId === TESTNET_CHAIN_ID || (!targetChainId && !isMainnet)
+  if (isNetTestnet) {
+    return {
+      chainId: TESTNET_CHAIN_ID,
+      chain: mstTestnet,
+      name: 'MST Testnet',
+      contractAddress: TESTNET_ESCROW,
+      currencySymbol: 'tMSTC',
+      rpcUrl: getTestnetRpcUrl(),
+      explorerUrl: 'https://testnet.mstscan.com',
+      isMainnet: false,
+      freshStartOppMinId: 9n,
+      freshStartContribMinId: 1n,
+    }
+  }
+  return {
+    chainId: MAINNET_CHAIN_ID,
+    chain: mstMainnet,
+    name: 'MST Mainnet',
+    contractAddress: MAINNET_ESCROW,
+    currencySymbol: 'MSTC',
+    rpcUrl: getMainnetRpcUrl(),
+    explorerUrl: 'https://mstscan.com',
+    isMainnet: true,
+    freshStartOppMinId: 4n,
+    freshStartContribMinId: 2n,
+  }
+}
 
 export const activeChain = isMainnet ? mstMainnet : mstTestnet
 export const chainId = activeChain.id

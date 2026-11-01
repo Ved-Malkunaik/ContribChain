@@ -57,7 +57,7 @@ export interface Submission {
   contributorAddress: string
   contributorUserId?: string
   githubUsername: string
-  githubPrUrl: string
+  githubPrUrl?: string
   prNumber: number
   prTitle: string
   prState: GitHubPrState

@@ -19,7 +19,7 @@ function parseSkills(val: unknown): string[] {
     try {
       const p = JSON.parse(val)
       if (Array.isArray(p)) return p.filter(Boolean).map(String)
-    } catch {}
+    } catch { }
     return val.split(',').map((s: string) => s.trim()).filter(Boolean)
   }
   return []
@@ -104,7 +104,7 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
         const storedSubs = JSON.parse(localStorage.getItem('contribchain.submissions') || '[]')
         const updatedSubs = [newSub, ...storedSubs.filter((s: any) => s.id !== newSub.id && (!newSub.txHash || s.txHash !== newSub.txHash))]
         localStorage.setItem('contribchain.submissions', JSON.stringify(updatedSubs))
-      } catch {}
+      } catch { }
       await client.invalidateQueries({ queryKey: ['platform-feed'] })
     }
     catch { /* TransactionStatus displays the error. */ }
@@ -227,29 +227,29 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
               </div>
             ) : tx.confirmedFor('submitContribution', oppId) ? <div role="status" className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6"><CheckCircle2 size={24} className="mb-4 text-emerald-300" /><h3 className="mb-2 text-sm font-semibold text-white">Submission recorded</h3><p className="text-xs leading-7 text-neutral-400">Your pull request was submitted and queued for publisher review on {networkName}.</p></div>
               : (!mounted || !isConnected) ? <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-6"><Lock size={22} className="mb-4 text-neutral-400" /><h3 className="mb-2 text-sm font-semibold text-white">Connect your wallet to contribute</h3><p className="text-xs leading-7 text-neutral-400">{data.demoMode ? `Connect BridgeKey or wallet via the top navigation to submit a demo contribution. The on-chain submission and any payout in ${currencySymbol} use this wallet.` : `Connect BridgeKey or wallet via the top navigation to verify identity and submit your PR to escrow on ${networkName}.`}</p></div>
-              : (mounted && !!address && address.toLowerCase() === opportunity.publisherAddress.toLowerCase()) ? (
-                <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-6">
-                  <ShieldCheck size={22} className="mb-4 text-emerald-400" />
-                  <h3 className="mb-2 text-sm font-semibold text-white">You are the Publisher of this project</h3>
-                  <p className="text-xs leading-7 text-neutral-400">
-                    Publishers review incoming pull requests and release payouts. Only independent contributors can submit contributions to claim bounties.
-                  </p>
-                  <Link href="/publisher" className="cc-btn cc-btn-secondary mt-4 w-full">
-                    Go to Publisher Hub
-                  </Link>
-                </div>
-              )
-              : <form onSubmit={handleSubmit} className="space-y-5">
-                <p className="mt-3 text-xs leading-7 text-neutral-400">Submit and obtain publisher approval before the deadline. Approval fixes the winner; payment requires a separate publisher transaction.</p>
-                <div className="cc-field"><label htmlFor="pull-request-url">{data.demoMode ? 'Demo pull request URL *' : 'GitHub pull request URL *'}</label>
-                  <input id="pull-request-url" type="url" required value={prUrl} onChange={(e) => setPrUrl(e.target.value.trim())} placeholder="https://github.com/owner/repo/pull/123" className="cc-input" />
-                  <p className="text-xs text-neutral-500 mt-1">Paste the public pull request link from GitHub. Links ending in /files, /commits, or /changes are accepted. GitHub account linking is optional; your connected wallet receives the reward after approval and merge.</p>
-                  {data.demoMode && <div className="mt-3 rounded-xl border border-amber-300/15 bg-amber-300/5 p-4"><button type="button" className="text-xs text-amber-200 underline underline-offset-4" onClick={() => setPrUrl(project.repoUrl.replace(/\/$/, '') + '/pull/1')}>Use example demo PR</button><p className="mt-3 text-xs leading-6 text-amber-200/70">This PR does not need to exist. GitHub identity and merge are simulated; submitting still records a real {networkName} wallet transaction.</p></div>}
-                </div>
-                <div className="cc-field"><label htmlFor="reviewer-notes">Notes for reviewer <span className="text-neutral-600">(optional)</span></label><textarea id="reviewer-notes" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Describe your changes and how you tested them…" className="cc-input" /></div>
-                {!canSubmit && <p className="text-xs leading-6 text-neutral-400">{opportunity.state !== 'Open' ? `This opportunity is ${opportunity.state.toLowerCase()} and no longer accepts submissions.` : deadlinePassed ? 'The submission deadline has passed.' : 'Checking the submission deadline…'}</p>}
-                <button type="submit" disabled={isSubmitting || !prUrl || !canSubmit} className="cc-btn cc-btn-primary w-full">{isSubmitting ? <Clock size={16} className="animate-spin" /> : <Send size={16} />}<span>{isSubmitting ? 'Verifying PR…' : 'Submit to opportunity'}</span></button>
-              </form>}
+                : (mounted && !!address && address.toLowerCase() === opportunity.publisherAddress.toLowerCase()) ? (
+                  <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-6">
+                    <ShieldCheck size={22} className="mb-4 text-emerald-400" />
+                    <h3 className="mb-2 text-sm font-semibold text-white">You are the Publisher of this project</h3>
+                    <p className="text-xs leading-7 text-neutral-400">
+                      Publishers review incoming pull requests and release payouts. Only independent contributors can submit contributions to claim bounties.
+                    </p>
+                    <Link href="/publisher" className="cc-btn cc-btn-secondary mt-4 w-full">
+                      Go to Publisher Hub
+                    </Link>
+                  </div>
+                )
+                  : <form onSubmit={handleSubmit} className="space-y-5">
+                    <p className="mt-3 text-xs leading-7 text-neutral-400">Submit and obtain publisher approval before the deadline. Approval fixes the winner; payment requires a separate publisher transaction.</p>
+                    <div className="cc-field"><label htmlFor="pull-request-url">{data.demoMode ? 'Demo pull request URL *' : 'GitHub pull request URL *'}</label>
+                      <input id="pull-request-url" type="url" required value={prUrl} onChange={(e) => setPrUrl(e.target.value.trim())} placeholder="https://github.com/owner/repo/pull/123" className="cc-input" />
+                      <p className="text-xs text-neutral-500 mt-1">Paste the public pull request link from GitHub. Links ending in /files, /commits, or /changes are accepted. GitHub account linking is optional; your connected wallet receives the reward after approval and merge.</p>
+                      {data.demoMode && <div className="mt-3 rounded-xl border border-amber-300/15 bg-amber-300/5 p-4"><button type="button" className="text-xs text-amber-200 underline underline-offset-4" onClick={() => setPrUrl(project.repoUrl.replace(/\/$/, '') + '/pull/1')}>Use example demo PR</button><p className="mt-3 text-xs leading-6 text-amber-200/70">This PR does not need to exist. GitHub identity and merge are simulated; submitting still records a real {networkName} wallet transaction.</p></div>}
+                    </div>
+                    <div className="cc-field"><label htmlFor="reviewer-notes">Notes for reviewer <span className="text-neutral-600">(optional)</span></label><textarea id="reviewer-notes" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Describe your changes and how you tested them…" className="cc-input" /></div>
+                    {!canSubmit && <p className="text-xs leading-6 text-neutral-400">{opportunity.state !== 'Open' ? `This opportunity is ${opportunity.state.toLowerCase()} and no longer accepts submissions.` : deadlinePassed ? 'The submission deadline has passed.' : 'Checking the submission deadline…'}</p>}
+                    <button type="submit" disabled={isSubmitting || !prUrl || !canSubmit} className="cc-btn cc-btn-primary w-full">{isSubmitting ? <Clock size={16} className="animate-spin" /> : <Send size={16} />}<span>{isSubmitting ? 'Verifying PR…' : 'Submit to opportunity'}</span></button>
+                  </form>}
           </section>
         </aside>
       </div>

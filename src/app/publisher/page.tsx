@@ -10,8 +10,13 @@ import { IdentityPanel, FeedStatus, TransactionStatus } from '@/components/Platf
 import { PublisherActions } from '@/components/PublisherActions'
 import { EmptyState, PageHeader, StatusBadge } from '@/components/ui/AppUI'
 import { getSubmissionPresentation } from '@/lib/submission-presentation'
-import { useFeed, useIdentity, useTransaction, useNow } from '@/lib/use-platform'
+import { useFeed, useIdentity, useTransaction, useNow, useActiveNetwork } from '@/lib/use-platform'
 import { explorerUrl, currencySymbol, networkName, isMainnet } from '@/lib/contract'
+
+function isValidGithubPr(url?: string | null): boolean {
+  if (!url) return false
+  return /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\/pull\/\d+/i.test(url)
+}
 
 type HubTab = 'projects' | 'submissions' | 'rewards' | 'refunds'
 
@@ -19,6 +24,7 @@ export default function PublisherHubPage() {
   const { address, isConnected } = useAccount()
   const [activeTab, setActiveTab] = useState<HubTab>('projects')
   const [mounted, setMounted] = useState(false)
+  const net = useActiveNetwork()
 
   useEffect(() => {
     setMounted(true)
@@ -39,8 +45,7 @@ export default function PublisherHubPage() {
     opportunities.some(o =>
       o.id === s.opportunityId ||
       (o.onChainId && String(o.onChainId) === s.opportunityId) ||
-      (o.txHash && o.txHash.toLowerCase() === s.opportunityId.toLowerCase()) ||
-      (isMainnet && o.onChainId === 2 && (s.opportunityId === '2' || s.onChainId === 1))
+      (o.txHash && o.txHash.toLowerCase() === s.opportunityId.toLowerCase())
     )
   )
   const totalEscrow = formatEther(opportunities.reduce((sum, o) => sum + parseEther(o.remainingEscrowEth || '0'), 0n))
@@ -228,7 +233,7 @@ export default function PublisherHubPage() {
                             <CheckCircle2 size={18} /> Reward paid · confirmed on {networkName}
                           </p>
                           <p className="text-3xl font-semibold tracking-tight">
-                            {presentation.rewardEth ?? '—'} <span className="text-base font-normal text-neutral-400">{currencySymbol}</span>
+                            {presentation.rewardEth ?? '—'} <span className="text-base font-normal text-neutral-400">{net.currencySymbol}</span>
                           </p>
                           <p className="text-xs text-neutral-400">
                             Recipient <span className="mt-1 block break-all font-mono text-neutral-300">{presentation.recipient}</span>
@@ -240,7 +245,7 @@ export default function PublisherHubPage() {
                           ) : (
                             <p className="text-xs text-neutral-400">Confirmed payout. Transaction receipt is synchronizing.</p>
                           )}
-                          {submission.demo && <p className="text-xs text-amber-300">The PR was simulated; this payout transferred real {currencySymbol} on {networkName}.</p>}
+                          {submission.demo && <p className="text-xs text-amber-300">The PR was simulated; this payout transferred real {net.currencySymbol} on {net.name}.</p>}
                         </div>
                       ) : (
                         <SubmissionProgress submission={submission} opportunity={opportunity} />
@@ -252,7 +257,7 @@ export default function PublisherHubPage() {
                           <span className="break-all font-mono">{submission.contributorAddress}</span>
                         </div>
                         <div className="cc-inline">
-                          {!submission.demo && submission.githubPrUrl && (
+                          {!submission.demo && submission.githubPrUrl && isValidGithubPr(submission.githubPrUrl) && (
                             <a href={submission.githubPrUrl} target="_blank" rel="noreferrer" className="cc-btn cc-btn-ghost">
                               View pull request <ExternalLink size={14} />
                             </a>
@@ -265,7 +270,7 @@ export default function PublisherHubPage() {
                                 onClick={() =>
                                   void tx.send('actions/prepare', {
                                     action: 'approveContribution',
-                                    opportunityId: submission.opportunityId,
+                                    opportunityId: opportunity?.onChainId ? String(opportunity.onChainId) : (opportunity?.id || submission.opportunityId),
                                     submissionId: submission.onChainId ? String(submission.onChainId) : submission.id,
                                   }).catch(() => {})
                                 }
@@ -279,7 +284,7 @@ export default function PublisherHubPage() {
                                 onClick={() =>
                                   void tx.send('actions/prepare', {
                                     action: 'rejectContribution',
-                                    opportunityId: submission.opportunityId,
+                                    opportunityId: opportunity?.onChainId ? String(opportunity.onChainId) : (opportunity?.id || submission.opportunityId),
                                     submissionId: submission.onChainId ? String(submission.onChainId) : submission.id,
                                   }).catch(() => {})
                                 }

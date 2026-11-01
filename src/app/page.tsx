@@ -2,17 +2,18 @@
 
 import { formatEther, parseEther } from 'viem'
 import Link from 'next/link'
-import { useFeed } from '@/lib/use-platform'
+import { useFeed, useActiveNetwork } from '@/lib/use-platform'
 import { FeedStatus } from '@/components/PlatformStatus'
 import { currencySymbol, networkName, isMainnet, chainId } from '@/lib/contract'
 
 export default function HomePage() {
   const { data } = useFeed()
+  const net = useActiveNetwork()
   const stats = {
     time: data.projects.length,
     uptime: data.opportunities.filter(o => o.state === 'Open').length,
     runtime: data.submissions.filter(s => s.status === 'Paid').length,
-    context: formatEther(data.opportunities.reduce((sum, o) => sum + parseEther(o.remainingEscrowEth || '0'), 0n)),
+    context: formatEther(data.opportunities.reduce((sum, o) => { try { return sum + parseEther(o.remainingEscrowEth || o.rewardEth || '0') } catch { return sum } }, 0n)),
   }
 
   return (
@@ -56,7 +57,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="h-9 sm:h-10 bg-[#28282a] border border-white/40 rounded-full inline-flex items-center -ml-4 pl-6 pr-4 sm:pr-5 text-[#c4c2c3] font-medium text-xs sm:text-[13px] whitespace-nowrap relative z-[3]">
-            <span>MST Blockchain · {networkName}</span>
+            <span>MST Blockchain · {net.name}</span>
           </div>
         </div>
 
@@ -125,7 +126,7 @@ export default function HomePage() {
           <div className="flex flex-col items-center">
             <div className="font-display text-white text-2xl sm:text-3xl leading-none mb-1">#</div>
             <div className="font-semibold text-white text-xl sm:text-2xl tracking-tight font-mono">
-              {stats.context} {currencySymbol}
+              {stats.context} {net.currencySymbol}
             </div>
             <div className="text-[#8e8e8e] text-xs sm:text-[12.5px] mt-0.5">Locked Escrow</div>
           </div>
@@ -190,15 +191,15 @@ export default function HomePage() {
                 </span>
               </div>
               <h3 className="text-lg font-semibold text-white mb-2">
-                {isMainnet ? 'Fund Wallet with MSTC' : 'Test Faucet in that Wallet'}
+                {net.isMainnet ? 'Fund Wallet with MSTC' : 'Test Faucet in that Wallet'}
               </h3>
               <p className="text-xs sm:text-sm text-[#99999f] leading-relaxed mb-6">
-                {isMainnet ? 'Ensure your wallet is funded with MSTC on MST Mainnet. Use MSTC tokens to fund bounty escrows, interact with smart contracts, and claim developer payouts.' : 'Fund your wallet address with free testnet MSTC (tMSTC) tokens via the official MSTScan faucet. Use testnet tokens to fund bounty escrows, interact with smart contracts, and claim development payouts.'}
+                {net.isMainnet ? 'Ensure your wallet is funded with MSTC on MST Mainnet. Use MSTC tokens to fund bounty escrows, interact with smart contracts, and claim developer payouts.' : 'Fund your wallet address with free testnet MSTC (tMSTC) tokens via the official MSTScan faucet. Use testnet tokens to fund bounty escrows, interact with smart contracts, and claim development payouts.'}
               </p>
               <div className="mt-auto pt-3 border-t border-white/10 flex items-center justify-between">
-                <span className="text-[11px] text-[#71717a]">{networkName} · Chain ID {chainId}</span>
+                <span className="text-[11px] text-[#71717a]">{net.name} · Chain ID {net.chainId}</span>
                 <a
-                  href={isMainnet ? 'https://mstscan.com' : 'https://testnet.mstscan.com'}
+                  href={net.explorerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 px-3.5 py-1.5 rounded-full transition-colors"

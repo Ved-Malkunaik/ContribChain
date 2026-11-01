@@ -1,12 +1,41 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'wagmi'
+import { useAccount, useChainId, usePublicClient, useSignMessage, useWriteContract } from 'wagmi'
 import { decodeFunctionData, decodeEventLog, encodeFunctionData, formatEther, type Abi, type Hash, type Hex } from 'viem'
-import { bountyAbi, contractAddress, chainId, currencySymbol, networkName, isMainnet } from './contract'
+import {
+  bountyAbi,
+  contractAddress,
+  chainId,
+  currencySymbol,
+  networkName,
+  isMainnet,
+  getNetworkConfig,
+  type NetworkConfig,
+  SUPPORTED_CHAIN_IDS,
+} from './contract'
 import type { Project, Opportunity, Submission } from '@/types'
 import { verifyIntentTransaction, type TransactionIntent } from './transaction-intent'
 import { isConfirmedTransactionFor } from './transaction-confirmation'
+
+const STORAGE_VERSION = 'v9_fresh_start'
+if (typeof window !== 'undefined') {
+  try {
+    if (localStorage.getItem('contribchain.storage_version') !== STORAGE_VERSION) {
+      localStorage.removeItem('contribchain.projects')
+      localStorage.removeItem('contribchain.opportunities')
+      localStorage.removeItem('contribchain.submissions')
+      localStorage.removeItem('contribchain.cached_feed')
+      localStorage.removeItem('contribchain.pending_tx')
+      localStorage.setItem('contribchain.storage_version', STORAGE_VERSION)
+    }
+  } catch {}
+}
+
+export function useActiveNetwork(): NetworkConfig {
+  const currentChainId = useChainId()
+  return getNetworkConfig(currentChainId)
+}
 
 export type Feed = {
   projects: Project[]
@@ -27,12 +56,18 @@ const blank: Feed = {
   syncError: null,
 }
 
-export async function api<T = Record<string, unknown>>(path: string, body?: unknown, wallet?: string): Promise<T> {
+export async function api<T = Record<string, unknown>>(
+  path: string,
+  body?: unknown,
+  wallet?: string,
+  targetChainId?: number | null
+): Promise<T> {
   const res = await fetch('/api/platform/' + path, {
     method: body === undefined ? 'GET' : 'POST',
     headers: {
       'content-type': 'application/json',
       ...(wallet ? { 'x-wallet-address': wallet } : {}),
+      ...(targetChainId ? { 'x-chain-id': String(targetChainId) } : {}),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
@@ -71,8 +106,11 @@ function sanitizeOpportunity(o: any): Opportunity {
 }
 
 export function useFeed() {
+  const currentChainId = useChainId()
+  const activeNet = getNetworkConfig(currentChainId)
+
   const query = useQuery({
-    queryKey: ['platform-feed'],
+    queryKey: ['platform-feed', activeNet.chainId],
     queryFn: async () => {
       let localProjects: any[] = []
       let localOpps: any[] = []
@@ -89,7 +127,7 @@ export function useFeed() {
 
       let serverFeed: Feed
       try {
-        serverFeed = await api<Feed>('feed')
+        serverFeed = await api<Feed>('feed', undefined, undefined, activeNet.chainId)
       } catch (err) {
         console.warn('[useFeed] Server feed unavailable, using local cache:', err)
         serverFeed = cachedFeed || blank
@@ -107,27 +145,16 @@ export function useFeed() {
       if (localProjects.length > 0) {
         const missing = localProjects.filter((lp) => !serverProjectIds.has(lp.id))
         if (missing.length > 0) {
-          void api('projects/sync', { projects: missing }).catch(() => {})
+          void api('projects/sync', { projects: missing }, undefined, activeNet.chainId).catch(() => {})
         }
       }
 
       const mergedOpps: Opportunity[] = serverFeed.opportunities.map(sanitizeOpportunity)
 
       for (const lo of localOpps) {
-        const titleLower = String(lo.title || '').toLowerCase()
-        if (
-          titleLower.includes('stellarpoll feature') ||
-          titleLower.includes('refactor ui') ||
-          titleLower.includes('enhance poll') ||
-          titleLower.includes('gas-optimized') ||
-          titleLower.includes('cross-chain')
-        ) {
-          continue
-        }
         const existing = mergedOpps.find((o) =>
           o.id === lo.id ||
           (o.onChainId && lo.onChainId && o.onChainId === lo.onChainId) ||
-          (isMainnet && (o.onChainId === 2 || lo.onChainId === 2) && (lo.rewardEth === '0.06' || titleLower.includes('landing page'))) ||
           (o.txHash && lo.txHash && o.txHash.toLowerCase() === lo.txHash.toLowerCase()) ||
           (o.title === lo.title && o.projectId === lo.projectId)
         )
@@ -145,7 +172,6 @@ export function useFeed() {
         const existing = mergedSubs.find((s) =>
           s.id === ls.id ||
           (s.onChainId && ls.onChainId && s.onChainId === ls.onChainId) ||
-          (isMainnet && (s.onChainId === 1 || ls.onChainId === 1)) ||
           (s.txHash && ls.txHash && s.txHash.toLowerCase() === ls.txHash.toLowerCase()) ||
           (s.githubPrUrl && ls.githubPrUrl && s.githubPrUrl.toLowerCase() === ls.githubPrUrl.toLowerCase())
         )
@@ -258,12 +284,15 @@ const pendingKey = 'contribchain.pending.v1'
 
 export function useTransaction() {
   const { address, chainId: connectedChain, connector } = useAccount()
+  const activeNet = getNetworkConfig(connectedChain)
+  const isSupported = connectedChain === 4646 || connectedChain === 91562037
+
   const identity = useQuery({
     queryKey: ['platform-session', address?.toLowerCase()],
-    queryFn: () => api<Identity>('session', undefined, address),
+    queryFn: () => api<Identity>('session', undefined, address, activeNet.chainId),
     staleTime: 0,
   })
-  const publicClient = usePublicClient({ chainId })
+  const publicClient = usePublicClient({ chainId: (isSupported ? connectedChain : activeNet.chainId) as 4646 | 91562037 })
   const { writeContractAsync } = useWriteContract()
   const cache = useQueryClient()
   const [message, setMessage] = useState('')
@@ -276,7 +305,7 @@ export function useTransaction() {
 
   const settle = useCallback(
     async (pending: Pending) => {
-      if (!publicClient) throw new Error(`${networkName} RPC unavailable`)
+      if (!publicClient) throw new Error(`${activeNet.name} RPC unavailable`)
       let current = pending
       const original = await publicClient.getTransaction({ hash: current.hash }).catch(() => null)
       let sameAction = true
@@ -291,7 +320,7 @@ export function useTransaction() {
           localStorage.setItem(pendingKey, JSON.stringify(current))
         }
       }
-      if (sameAction) await api('transactions/track', current, current.wallet)
+      if (sameAction) await api('transactions/track', current, current.wallet, activeNet.chainId)
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: current.hash,
         confirmations: 1,
@@ -314,12 +343,12 @@ export function useTransaction() {
       localStorage.setItem(pendingKey, JSON.stringify(current))
       setHash(current.hash)
       if (receipt.status !== 'success') {
-        await api('transactions/reconcile', { hash: current.hash }, current.wallet).catch(() => {})
+        await api('transactions/reconcile', { hash: current.hash }, current.wallet, activeNet.chainId).catch(() => {})
         localStorage.removeItem(pendingKey)
-        throw new Error(`Transaction reverted on ${networkName}; escrow state was not changed`)
+        throw new Error(`Transaction reverted on ${activeNet.name}; escrow state was not changed`)
       }
-      await api('transactions/track', current, current.wallet)
-      await api('transactions/reconcile', { hash: current.hash }, current.wallet)
+      await api('transactions/track', current, current.wallet, activeNet.chainId)
+      await api('transactions/reconcile', { hash: current.hash }, current.wallet, activeNet.chainId)
       localStorage.removeItem(pendingKey)
       try {
         for (const log of receipt.logs) {
@@ -373,11 +402,11 @@ export function useTransaction() {
       } catch {
         setConfirmedFunction('')
       }
-      setMessage(`Confirmed on ${networkName}. Data synchronized.`)
+      setMessage(`Confirmed on ${activeNet.name}. Data synchronized.`)
       await cache.invalidateQueries()
       return current.hash
     },
-    [publicClient, cache]
+    [publicClient, cache, activeNet]
   )
 
   async function send(endpoint: string, body: unknown) {
@@ -400,16 +429,16 @@ export function useTransaction() {
           throw new Error('A transaction is already stored as pending. Recover or clear it in "Transaction recovery" below before sending another transaction.')
         }
       }
-      if (!address || connectedChain !== chainId) {
-        throw new Error(`Connect your wallet and switch to ${networkName}`)
+      if (!address || !isSupported) {
+        throw new Error('Please connect your wallet to MST Mainnet or MST Testnet')
       }
-      if (!contractAddress || !publicClient) {
-        throw new Error(`${networkName} escrow contract is not configured`)
+      if (!activeNet.contractAddress || !publicClient) {
+        throw new Error(`${activeNet.name} escrow contract is not configured`)
       }
       if (!identity.data?.authenticated || identity.data.wallet !== address.toLowerCase()) {
         throw new Error('Connect your wallet before using protected platform actions')
       }
-      const prepared = await api<Prepared>(endpoint, body, address)
+      const prepared = await api<Prepared>(endpoint, body, address, activeNet.chainId)
 
       if (prepared.completed || !prepared.call) {
         setMessage('Action completed successfully.')
@@ -423,7 +452,7 @@ export function useTransaction() {
         return f && 'inputs' in f && f.inputs[i]?.type.startsWith('uint') ? BigInt(arg) : arg
       })
       const call = {
-        address: contractAddress,
+        address: activeNet.contractAddress,
         abi: bountyAbi as Abi,
         functionName: prepared.call.functionName,
         args,
@@ -439,30 +468,30 @@ export function useTransaction() {
       const gas = await publicClient.estimateContractGas(call).catch(() => 100000n)
       const gasPrice = await publicClient.getGasPrice().catch(() => 1000000000n)
       const estimate = formatEther(gas * gasPrice)
-      setMessage(`Estimated gas: ${estimate} ${currencySymbol}. Confirm in your wallet.`)
+      setMessage(`Estimated gas: ${estimate} ${activeNet.currencySymbol}. Confirm in your wallet.`)
 
       const sentBlock = (await publicClient.getBlockNumber({ cacheTime: 0 })).toString()
       const tx = await writeContractAsync({
-        address: contractAddress,
+        address: activeNet.contractAddress,
         abi: bountyAbi as Abi,
         functionName: prepared.call.functionName,
         args,
         value: BigInt(prepared.call.value || '0'),
-        chainId,
+        chainId: activeNet.chainId as 4646 | 91562037,
         connector,
       })
       const pending: Pending = {
         hash: tx,
         intentId: prepared.intentId,
         wallet: address.toLowerCase(),
-        to: contractAddress,
+        to: activeNet.contractAddress,
         data: encodeFunctionData({ abi: bountyAbi as Abi, functionName: prepared.call.functionName, args }),
         value: call.value.toString(),
         sentBlock,
       }
       localStorage.setItem(pendingKey, JSON.stringify(pending))
       setHash(tx)
-      setMessage(`Transaction submitted on ${networkName}. Waiting for confirmation…`)
+      setMessage(`Transaction submitted on ${activeNet.name}. Waiting for confirmation…`)
       return await settle(pending)
     } catch (e) {
       const rawMsg = e instanceof Error ? e.message : 'Transaction failed'

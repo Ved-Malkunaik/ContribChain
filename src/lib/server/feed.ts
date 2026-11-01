@@ -1,6 +1,6 @@
 import { formatEther, parseEther } from 'viem'
-import { bountyAbi, contractAddress, networkName, isMainnet } from '../contract'
-import { chainClient, chainConfig, reconcile } from './chain'
+import { bountyAbi, getNetworkConfig, type NetworkConfig } from '../contract'
+import { getChainContext, reconcile } from './chain'
 import { db } from './db'
 import { refreshDuePulls } from './github'
 import { demoMode } from './auth'
@@ -8,8 +8,14 @@ import { readFeedCollection } from './feed-read'
 import { parsePull } from '../security'
 import type { Project, Opportunity, Submission } from '@/types'
 
-export async function feed() {
-  const configured = Boolean(contractAddress)
+function isValidGithubPr(url?: string | null): boolean {
+  if (!url) return false
+  return /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+\/pull\/\d+/i.test(url)
+}
+
+export async function feed(targetChainId?: number | null) {
+  const { net, client, address } = getChainContext(targetChainId)
+  const configured = Boolean(address)
   const empty = {
     projects: [] as Project[],
     opportunities: [] as Opportunity[],
@@ -18,6 +24,10 @@ export async function feed() {
     configured,
     demoMode: demoMode(),
     syncError: null as string | null,
+    chainId: net.chainId,
+    currencySymbol: net.currencySymbol,
+    networkName: net.name,
+    explorerUrl: net.explorerUrl,
   }
 
   // 1. Fetch persistent database records
@@ -101,7 +111,7 @@ export async function feed() {
     contributorAddress: s.contributorAddress,
     contributorUserId: s.contributorUserId || undefined,
     githubUsername: s.githubUsername || 'Contributor',
-    githubPrUrl: s.prUrl,
+    githubPrUrl: isValidGithubPr(s.prUrl) ? s.prUrl : undefined,
     prNumber: s.prNumber,
     prTitle: `${s.repoOwner}/${s.repoName} #${s.prNumber}`,
     prState: s.isMerged ? 'merged' : 'open',
@@ -123,6 +133,7 @@ export async function feed() {
     'chainlink functions web3 toolkit',
     'safe account modules',
     'test dapp',
+    'stellarpoll',
   ])
   const mockProjectIds = new Set(['proj-1', 'proj-2', 'proj-3', 'cmvc9booi00017aw0yi9ytmcr'])
   const mockOppTitles = new Set([
@@ -144,46 +155,31 @@ export async function feed() {
     'onchain-opp-1', 'onchain-opp-3', 'onchain-opp-4', 'onchain-opp-5', 'onchain-opp-6', 'onchain-opp-7',
   ])
 
-  empty.projects = mappedProjects.filter(p => !mockProjectIds.has(p.id) && !mockProjectNames.has(p.name.toLowerCase().trim()))
-  const MAINNET_PROJECT_ID = '69f67dba-3838-4578-8ae8-cae0b2eb7de6'
-  if (isMainnet && !empty.projects.some(p => p.id === MAINNET_PROJECT_ID || p.name.toLowerCase() === 'web3 dapp store')) {
-    empty.projects.push({
-      id: MAINNET_PROJECT_ID,
-      onChainId: 1,
-      name: 'Web3 dapp store',
-      shortDescription: 'Decentralized application directory and ecosystem portal for MST Blockchain.',
-      detailedDescription: 'The Web3 dapp store connects users and contributors to decentralized applications running on MST Chain. Features verified contracts, open-source bounties, and community governance.',
-      category: 'Infrastructure',
-      technologies: ['Solidity', 'TypeScript', 'React', 'Tailwind CSS'],
-      repoId: 'web3-dapp-store',
-      repoUrl: 'https://github.com/Ved-Malkunaik/Web3-dapp-store',
-      liveDappUrl: 'https://contrib-chain.vercel.app',
-      publisherAddress: '0x6b4b1b7640ed0542a5d00a774994b04478deecfc',
-      opportunitiesCount: 1,
-      createdAt: '2026-10-31T12:00:00.000Z',
-    })
-  }
+  // Fresh start: Only include real user-created projects and opportunities
+  empty.projects = mappedProjects.filter(p =>
+    !mockProjectIds.has(p.id) &&
+    !mockProjectNames.has(p.name.toLowerCase().trim())
+  )
+
   empty.opportunities = mappedOpps.filter(o =>
     !mockOppIds.has(o.id) &&
     !mockOppTitles.has(o.title.toLowerCase().trim()) &&
-    (!isMainnet || o.onChainId !== 1) &&
-    (!o.onChainId || isMainnet || o.onChainId >= 8)
-  )
-  empty.submissions = mappedSubs.filter(s =>
-    (!s.onChainId || isMainnet || s.onChainId >= 5) &&
-    !mockOppIds.has(s.opportunityId) &&
-    (!isMainnet || s.opportunityId !== '1')
+    (!o.onChainId || BigInt(o.onChainId) >= net.freshStartOppMinId)
   )
 
-  // 2. Synchronize with live escrow contract if configured
+  empty.submissions = mappedSubs.filter(s =>
+    !mockOppIds.has(s.opportunityId) &&
+    (!s.onChainId || BigInt(s.onChainId) >= net.freshStartContribMinId)
+  )
+
+  // 2. Synchronize with live escrow contract for active network
   if (configured) {
     try {
       await reconcile()
     } catch (error) {
-      empty.syncError = error instanceof Error ? error.message : `${networkName} sync unavailable`
+      empty.syncError = error instanceof Error ? error.message : `${net.name} sync unavailable`
     }
 
-    // GitHub PR tracking is independent of escrow RPC availability.
     try {
       await refreshDuePulls()
       const trackedPulls = await db.verifiedSubmission.findMany({
@@ -203,31 +199,25 @@ export async function feed() {
       empty.syncError ||= error instanceof Error ? error.message : 'GitHub PR sync unavailable'
     }
 
-    let liveEscrow = 0n
     let nextOppId = 0n
     let nextContribId = 0n
 
     try {
-      const [nOpp, nContrib, escrowBal] = await Promise.all([
-        chainClient.readContract({ address: chainConfig(), abi: bountyAbi, functionName: 'nextOpportunityId' }).catch(() => 0n),
-        chainClient.readContract({ address: chainConfig(), abi: bountyAbi, functionName: 'nextContributionId' }).catch(() => 0n),
-        chainClient.readContract({ address: chainConfig(), abi: bountyAbi, functionName: 'escrowBalance' }).catch(() => 0n),
+      const [nOpp, nContrib] = await Promise.all([
+        client.readContract({ address, abi: bountyAbi, functionName: 'nextOpportunityId' }).catch(() => 0n),
+        client.readContract({ address, abi: bountyAbi, functionName: 'nextContributionId' }).catch(() => 0n),
       ])
       nextOppId = BigInt(nOpp || 0)
       nextContribId = BigInt(nContrib || 0)
-      liveEscrow = BigInt(escrowBal || 0)
     } catch {
-      // Ignore RPC failure
+      // RPC fallback
     }
 
-    const defaultProject = empty.projects.find(p => p.name.toLowerCase() === 'web3 dapp store' || p.name === 'StellarPoll' || p.repoUrl.includes('StellarPoll')) || empty.projects[0]
-    const defaultProjectId = defaultProject?.id || (isMainnet ? MAINNET_PROJECT_ID : 'a20e3399-e403-4c28-8699-6987885a6b47')
-
-    const initialOppId = isMainnet ? 1n : 8n
-    for (let i = initialOppId; i < nextOppId; i++) {
+    // Only scan on-chain opportunities created from freshStartOppMinId onwards
+    for (let i = net.freshStartOppMinId; i < nextOppId; i++) {
       try {
-        const onChain = await chainClient.readContract({
-          address: chainConfig(),
+        const onChain = await client.readContract({
+          address,
           abi: bountyAbi,
           functionName: 'opportunities',
           args: [i],
@@ -242,12 +232,12 @@ export async function feed() {
         const deadlineDate = new Date(Number(onChain[6]) * 1000).toISOString()
         const selectedId = onChain[7] > 0n ? onChain[7].toString() : undefined
         const statusNum = Number(onChain[9])
-        const stateStr: Opportunity['state'] = statusNum === 1 ? 'Open' : statusNum === 2 ? 'Approved' : statusNum === 3 ? 'Paid' : statusNum === 4 ? 'Refunded' : 'Open'
+        const stateStr: Opportunity['state'] =
+          statusNum === 1 ? 'Open' : statusNum === 2 ? 'Approved' : statusNum === 3 ? 'Paid' : statusNum === 4 ? 'Refunded' : 'Open'
 
         const existing = empty.opportunities.find(o =>
           o.onChainId === oppIdNum ||
-          (o.metadataHash && o.metadataHash.toLowerCase() === onChainMetadataHash) ||
-          (o.publisherAddress.toLowerCase() === publisherAddr && o.rewardEth === reward)
+          (o.metadataHash && o.metadataHash.toLowerCase() === onChainMetadataHash)
         )
         if (existing) {
           existing.onChainId = oppIdNum
@@ -267,7 +257,6 @@ export async function feed() {
             },
           }).catch(() => {})
         } else {
-          // Check if DB already has this opportunity
           const dbOpp = await db.opportunity.findFirst({
             where: {
               OR: [
@@ -278,15 +267,18 @@ export async function feed() {
           }).catch(() => null)
 
           const snap = await db.snapshot.findFirst({ where: { hash: onChainMetadataHash } }).catch(() => null)
-          let title = dbOpp?.title || (isMainnet && i === 2n ? 'landing page improvements' : `Bounty Task #${i}`)
-          let description = dbOpp?.description || (isMainnet && i === 2n ? 'Improve landing page UI/UX, responsive layout and contributor experience' : `Escrow bounty confirmed on ${networkName}`)
-          let acceptanceCriteria = dbOpp?.acceptanceCriteria || 'Complete task criteria and merge PR on GitHub'
+          if (!snap && !dbOpp) {
+            // No metadata available for an unmapped opportunity; skip
+            continue
+          }
+
+          let title = dbOpp?.title || `Opportunity #${i}`
+          let description = dbOpp?.description || `Bounty opportunity on ${net.name}`
+          let acceptanceCriteria = dbOpp?.acceptanceCriteria || 'Merge GitHub PR and meet acceptance criteria'
           let difficulty = dbOpp?.difficulty || 'intermediate'
-          let requiredSkills = dbOpp?.requiredSkills ? (() => { try { return JSON.parse(dbOpp.requiredSkills) } catch { return ['TypeScript', 'Tailwind CSS'] } })() : ['TypeScript', 'Tailwind CSS', 'React']
+          let requiredSkills = dbOpp?.requiredSkills ? (() => { try { return JSON.parse(dbOpp.requiredSkills) } catch { return [] } })() : []
           let taskType = dbOpp?.taskType || 'feature'
-          let projId = dbOpp?.projectId || defaultProjectId
-          const txHash = dbOpp?.txHash || (isMainnet && i === 2n ? '0xa9cc0086f2d7ed2e13e788ce6cf089421ebb6c8400116361d143d601aa28b6e0' : undefined)
-          const oppRecordId = dbOpp?.id || (isMainnet && i === 2n ? '0xa9cc0086f2d7ed2e13e788ce6cf089421ebb6c8400116361d143d601aa28b6e0' : (snap?.id || `onchain-opp-${i}`))
+          let projId = dbOpp?.projectId || (empty.projects[0]?.id || '')
 
           if (snap) {
             try {
@@ -297,14 +289,14 @@ export async function feed() {
               if (meta.difficulty) difficulty = meta.difficulty
               if (meta.requiredSkills) requiredSkills = meta.requiredSkills
               if (meta.taskType) taskType = meta.taskType
-              if (meta.projectId && empty.projects.some(p => p.id === meta.projectId || p.repoId === meta.projectId)) {
+              if (meta.projectId && empty.projects.some(p => p.id === meta.projectId)) {
                 projId = meta.projectId
               }
             } catch {}
           }
 
           const createdOpp: Opportunity = {
-            id: oppRecordId,
+            id: dbOpp?.id || (snap?.id || `onchain-opp-${i}`),
             onChainId: oppIdNum,
             projectId: projId,
             publisherAddress: publisherAddr,
@@ -321,45 +313,17 @@ export async function feed() {
             selectedSubmissionId: selectedId,
             createdAt: dbOpp?.createdAt ? dbOpp.createdAt.toISOString() : new Date().toISOString(),
             metadataHash: onChainMetadataHash,
-            txHash,
           }
           empty.opportunities.push(createdOpp)
-
-          await db.opportunity.upsert({
-            where: { id: createdOpp.id },
-            create: {
-              id: createdOpp.id,
-              onChainId: oppIdNum,
-              projectId: projId,
-              publisherAddress: publisherAddr,
-              title,
-              taskType: taskType || 'feature',
-              description,
-              acceptanceCriteria,
-              difficulty,
-              requiredSkills: JSON.stringify(requiredSkills),
-              rewardEth: reward,
-              rewardWei: onChain[4].toString(),
-              deadline: new Date(Number(onChain[6]) * 1000),
-              state: statusNum === 1 ? 'OPEN' : statusNum === 2 ? 'APPROVED' : statusNum === 3 ? 'PAID' : 'REFUNDED',
-              selectedSubmissionId: selectedId || null,
-              metadataHash: onChainMetadataHash,
-            },
-            update: {
-              onChainId: oppIdNum,
-              state: statusNum === 1 ? 'OPEN' : statusNum === 2 ? 'APPROVED' : statusNum === 3 ? 'PAID' : 'REFUNDED',
-              selectedSubmissionId: selectedId || null,
-            },
-          }).catch(() => {})
         }
       } catch {}
     }
 
-    const initialContribId = isMainnet ? 1n : 5n
-    for (let j = initialContribId; j < nextContribId; j++) {
+    // Only scan contributions created from freshStartContribMinId onwards
+    for (let j = net.freshStartContribMinId; j < nextContribId; j++) {
       try {
-        const c = await chainClient.readContract({
-          address: chainConfig(),
+        const c = await client.readContract({
+          address,
           abi: bountyAbi,
           functionName: 'contributions',
           args: [j],
@@ -378,23 +342,12 @@ export async function feed() {
         const existingSub = empty.submissions.find(s =>
           s.onChainId === contribIdNum ||
           s.id === `contrib-${j}` ||
-          (isMainnet && contribIdNum === 1 && (s.id === '0x0ea34feb1d32c0237ec536a2837550ddb50293f1cb0b4a0adad2496b9453e' || s.txHash === '0x0ea34feb1d32c0237ec536a2837550ddb50293f1cb0b4a0adad2496b9453e')) ||
-          (s.contributorAddress.toLowerCase() === contributorAddr && (
-            s.opportunityId === contribOppIdStr ||
-            (matchedOpp && s.opportunityId === matchedOpp.id) ||
-            empty.opportunities.find(o => o.onChainId === Number(c[1]))?.id === s.opportunityId
-          ))
+          (s.contributorAddress.toLowerCase() === contributorAddr && s.opportunityId === oppIdToLink)
         )
         if (existingSub) {
           existingSub.onChainId = contribIdNum
           existingSub.status = contribStatus
           existingSub.contributorAddress = contributorAddr
-          if (matchedOpp && existingSub.opportunityId !== matchedOpp.id) {
-            existingSub.opportunityId = matchedOpp.id
-          }
-          if (isMainnet && contribIdNum === 1 && !existingSub.txHash) {
-            existingSub.txHash = '0x0ea34feb1d32c0237ec536a2837550ddb50293f1cb0b4a0adad2496b9453e'
-          }
         } else {
           const v = await db.verifiedSubmission.findFirst({
             where: {
@@ -406,97 +359,43 @@ export async function feed() {
             },
           }).catch(() => null)
 
-          const repoUrl = defaultProject?.repoUrl || (isMainnet ? 'https://github.com/Ved-Malkunaik/Web3-dapp-store' : 'https://github.com/Ved-Malkunaik/StellarPoll')
-          const prNumber = v?.prNumber || 1
-          const prUrl = v?.url || `${repoUrl}/pull/${prNumber}`
-
-          const newSub: Submission = {
-            id: v?.id || (isMainnet && contribIdNum === 1 ? '0x0ea34feb1d32c0237ec536a2837550ddb50293f1cb0b4a0adad2496b9453e' : `contrib-${j}`),
-            onChainId: contribIdNum,
-            opportunityId: oppIdToLink,
-            contributorAddress: contributorAddr,
-            githubUsername: v?.login || (contributorAddr ? `${contributorAddr.slice(0, 6)}...${contributorAddr.slice(-4)}` : 'Contributor'),
-            githubPrUrl: prUrl,
-            prNumber,
-            prTitle: v?.title || `Pull Request #${prNumber}`,
-            prState: (v?.prState as any) || 'open',
-            status: contribStatus,
-            notes: v?.notes || `${networkName} contribution`,
-            createdAt: v?.createdAt ? v.createdAt.toISOString() : new Date().toISOString(),
-            identityVerified: true,
-            demo: false,
-            prCommit: v?.commit || '35c8e3dc36ee',
-            lastSyncedAt: new Date().toISOString(),
-            verifiedRecordId: v?.id || `contrib-${j}`,
-            txHash: isMainnet && contribIdNum === 1 ? '0x0ea34feb1d32c0237ec536a2837550ddb50293f1cb0b4a0adad2496b9453e' : undefined,
-          }
-          empty.submissions.push(newSub)
-
-          const parsed = parsePull(prUrl)
-          const existingRepoSub = await db.submission.findUnique({
-            where: {
-              repoOwner_repoName_prNumber: {
-                repoOwner: parsed.owner,
-                repoName: parsed.repo,
-                prNumber,
-              },
-            },
-          }).catch(() => null)
-
-          if (existingRepoSub) {
-            await db.submission.update({
-              where: { id: existingRepoSub.id },
-              data: {
-                onChainId: contribIdNum,
-                status: contribStatusNum === 2 ? 'APPROVED' : contribStatusNum === 4 ? 'PAID' : 'PENDING',
-                isMerged: true,
-                contributorAddress: contributorAddr,
-              },
-            }).catch(() => {})
-          } else {
-            await db.submission.create({
-              data: {
-                id: newSub.id,
-                opportunityId: empty.opportunities.find(o => o.onChainId === Number(c[1]) || o.id === contribOppIdStr)?.id || contribOppIdStr,
-                contributorAddress: contributorAddr,
-                githubUsername: newSub.githubUsername,
-                prUrl,
-                prNumber,
-                repoOwner: parsed.owner,
-                repoName: parsed.repo,
-                notes: newSub.notes,
-                status: contribStatusNum === 2 ? 'APPROVED' : contribStatusNum === 4 ? 'PAID' : 'PENDING',
-                isMerged: true,
-                onChainId: contribIdNum,
-              },
-            }).catch(() => {})
-          }
-
-          if (v) {
-            await db.verifiedSubmission.update({
-              where: { id: v.id },
-              data: {
-                chainRef: contribIdNum.toString(),
-                wallet: contributorAddr,
-                prState: 'merged',
-              },
-            }).catch(() => {})
+          if (v && isValidGithubPr(v.url)) {
+            const parsed = parsePull(v.url)
+            empty.submissions.push({
+              id: v.id,
+              onChainId: contribIdNum,
+              opportunityId: oppIdToLink,
+              contributorAddress: contributorAddr,
+              githubUsername: v.login || `${contributorAddr.slice(0, 6)}...${contributorAddr.slice(-4)}`,
+              githubPrUrl: v.url,
+              prNumber: v.prNumber,
+              prTitle: v.title || `Pull Request #${v.prNumber}`,
+              prState: (v.prState as any) || 'open',
+              status: contribStatus,
+              notes: v.notes || `${net.name} contribution`,
+              createdAt: v.createdAt ? v.createdAt.toISOString() : new Date().toISOString(),
+              identityVerified: true,
+              demo: false,
+              prCommit: v.commit || undefined,
+              lastSyncedAt: new Date().toISOString(),
+              verifiedRecordId: v.id,
+            })
           }
         }
       } catch {}
     }
 
-    // Read on-chain opportunity states for any linked opportunities
+    // Refresh on-chain states for opportunities
     for (const opp of empty.opportunities) {
       if (!opp.onChainId) continue
       try {
-        const onChain = await chainClient.readContract({
-          address: chainConfig(),
+        const onChain = await client.readContract({
+          address,
           abi: bountyAbi,
           functionName: 'opportunities',
           args: [BigInt(opp.onChainId)],
         })
-        if (onChain && onChain[10]) { // exists is index 10
+        if (onChain && onChain[10]) {
           opp.rewardEth = formatEther(onChain[4])
           opp.remainingEscrowEth = formatEther(onChain[5])
           opp.deadline = new Date(Number(onChain[6]) * 1000).toISOString()
@@ -506,123 +405,31 @@ export async function feed() {
             opp.selectedSubmissionId = onChain[7].toString()
           }
         }
-      } catch {
-        // Contract call fallback to db representation
-      }
+      } catch {}
     }
 
-    // Read on-chain contribution states for linked submissions
+    // Refresh on-chain states for submissions
     for (const sub of empty.submissions) {
       if (!sub.onChainId) continue
       try {
-        const onChain = await chainClient.readContract({
-          address: chainConfig(),
+        const onChain = await client.readContract({
+          address,
           abi: bountyAbi,
           functionName: 'contributions',
           args: [BigInt(sub.onChainId)],
         })
-        if (onChain && onChain[5]) { // exists
+        if (onChain && onChain[5]) {
           const status = Number(onChain[4])
           sub.status = status === 1 ? 'Pending' : status === 2 ? 'Approved' : status === 3 ? 'Rejected' : status === 4 ? 'Paid' : sub.status
         }
-      } catch {
-        // Fallback to db
-      }
-    }
-
-    // Pull verified submissions that might not have a direct db.submission record yet
-    const verifiedList = await db.verifiedSubmission.findMany({
-      where: { chainAddress: chainConfig().toLowerCase() },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    }).catch(() => [])
-
-    for (const v of verifiedList) {
-      if (empty.submissions.some(s => s.id === v.id || (v.chainRef && s.onChainId === Number(v.chainRef)))) {
-        continue
-      }
-      const paid = await db.chainEvent.findFirst({
-        where: {
-          contractAddress: chainConfig().toLowerCase(),
-          eventName: 'RewardReleased',
-          payload: { contains: `"contributionId":"${v.chainRef}"` },
-        },
-      })
-      const isDemo = v.githubId.startsWith('demo:')
-      empty.submissions.push({
-        id: v.id,
-        onChainId: v.chainRef ? Number(v.chainRef) : 0,
-        opportunityId: v.opportunityId,
-        contributorAddress: v.wallet,
-        githubUsername: v.login,
-        githubPrUrl: v.url,
-        prNumber: v.prNumber,
-        prTitle: v.title,
-        prState: v.prState as Submission['prState'],
-        status: paid ? 'Paid' : 'Pending',
-        notes: v.notes,
-        createdAt: v.createdAt.toISOString(),
-        payoutTxHash: paid?.transactionHash,
-        identityVerified: false,
-        demo: isDemo,
-        prCommit: v.commit,
-        lastSyncedAt: v.syncedAt.toISOString(),
-        syncError: v.syncError || undefined,
-        verifiedRecordId: v.id,
-      })
+      } catch {}
     }
   }
 
-  empty.projects = empty.projects.filter(p => !mockProjectIds.has(p.id) && !mockProjectNames.has(p.name.toLowerCase().trim()))
-  if (isMainnet && !empty.projects.some(p => p.id === MAINNET_PROJECT_ID || p.name.toLowerCase() === 'web3 dapp store')) {
-    empty.projects.push({
-      id: MAINNET_PROJECT_ID,
-      onChainId: 1,
-      name: 'Web3 dapp store',
-      shortDescription: 'Decentralized application directory and ecosystem portal for MST Blockchain.',
-      detailedDescription: 'The Web3 dapp store connects users and contributors to decentralized applications running on MST Chain. Features verified contracts, open-source bounties, and community governance.',
-      category: 'Infrastructure',
-      technologies: ['Solidity', 'TypeScript', 'React', 'Tailwind CSS'],
-      repoId: 'web3-dapp-store',
-      repoUrl: 'https://github.com/Ved-Malkunaik/Web3-dapp-store',
-      liveDappUrl: 'https://contrib-chain.vercel.app',
-      publisherAddress: '0x6b4b1b7640ed0542a5d00a774994b04478deecfc',
-      opportunitiesCount: 1,
-      createdAt: '2026-10-31T12:00:00.000Z',
-    })
+  // Final cleanup of opportunitiesCount
+  for (const project of empty.projects) {
+    project.opportunitiesCount = empty.opportunities.filter(o => o.projectId === project.id).length
   }
-  empty.opportunities = empty.opportunities.filter(o =>
-    !mockOppIds.has(o.id) &&
-    !mockOppTitles.has(o.title.toLowerCase().trim()) &&
-    (!isMainnet || o.onChainId !== 1) &&
-    (!o.onChainId || isMainnet || o.onChainId >= 8)
-  )
-  empty.submissions = empty.submissions.filter(s =>
-    (!s.onChainId || isMainnet || s.onChainId >= 5) &&
-    !mockOppIds.has(s.opportunityId) &&
-    (!isMainnet || s.opportunityId !== '1')
-  )
-
-  // 3. Compute stats
-  for (const p of empty.projects) {
-    const open = empty.opportunities.filter(o => o.projectId === p.id && o.state === 'Open')
-    p.opportunitiesCount = open.length
-    p.totalBountyEth = formatEther(open.reduce((sum, o) => sum + parseEther(o.remainingEscrowEth || '0'), 0n))
-  }
-  for (const o of empty.opportunities) {
-    o.submissionsCount = empty.submissions.filter(s =>
-      s.opportunityId === o.id ||
-      (o.onChainId && String(o.onChainId) === s.opportunityId) ||
-      (o.txHash && o.txHash.toLowerCase() === s.opportunityId.toLowerCase())
-    ).length
-  }
-
-  empty.transactions = await db.transaction.findMany({
-    where: { contractAddress: chainConfig().toLowerCase() },
-    take: 100,
-    orderBy: { updatedAt: 'desc' },
-    select: { hash: true, wallet: true, status: true },
-  }).catch(() => [])
 
   return empty
 }

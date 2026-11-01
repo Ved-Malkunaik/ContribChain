@@ -1,39 +1,58 @@
 import { decodeEventLog, createPublicClient, http, keccak256, toHex, type Hash, type Address } from 'viem'
-import { activeChain, bountyAbi, contractAddress, deploymentBlock, networkName, getActiveRpcUrl } from '../contract'
+import {
+  activeChain,
+  bountyAbi,
+  contractAddress,
+  deploymentBlock,
+  networkName,
+  getActiveRpcUrl,
+  getNetworkConfig,
+  MAINNET_CHAIN_ID,
+  TESTNET_CHAIN_ID,
+} from '../contract'
 import { db } from './db'
 import { rewardWei } from '../security'
 import { z } from 'zod'
 
 export const json = (value: unknown) => JSON.stringify(value, (_, v) => typeof v === 'bigint' ? v.toString() : v)
 
+export function getChainContext(targetChainId?: number | null) {
+  const net = getNetworkConfig(targetChainId)
+  const client = createPublicClient({
+    chain: net.chain,
+    transport: http(net.rpcUrl),
+  })
+  return { net, client, address: net.contractAddress }
+}
+
 export const chainClient = createPublicClient({
   chain: activeChain,
   transport: http(getActiveRpcUrl()),
 })
 
-export function chainConfig(): Address {
-  if (!contractAddress) throw new Error(`${networkName} contract address is not configured`)
-  return contractAddress
+export function chainConfig(targetChainId?: number | null): Address {
+  return getNetworkConfig(targetChainId).contractAddress
 }
 
-export async function assertExpectedChain() {
-  const actual = await chainClient.getChainId()
-  if (actual !== activeChain.id) {
-    throw new Error(`RPC chain ID mismatch: expected ${activeChain.id}, received ${actual}`)
+export async function assertExpectedChain(targetChainId?: number | null) {
+  const { net, client } = getChainContext(targetChainId)
+  const actual = await client.getChainId()
+  if (actual !== net.chainId) {
+    throw new Error(`RPC chain ID mismatch: expected ${net.chainId}, received ${actual}`)
   }
 }
 
-export async function receipt(hash: Hash) {
-  const address = chainConfig()
-  await assertExpectedChain()
-  const r = await chainClient.getTransactionReceipt({ hash })
+export async function receipt(hash: Hash, targetChainId?: number | null) {
+  const { client, address } = getChainContext(targetChainId)
+  await assertExpectedChain(targetChainId)
+  const r = await client.getTransactionReceipt({ hash })
   if (
     r.to?.toLowerCase() !== address.toLowerCase() &&
     !r.logs.some(log => log.address.toLowerCase() === address.toLowerCase())
   ) {
     throw new Error('Transaction targets another contract')
   }
-  const head = await chainClient.getBlockNumber({ cacheTime: 0 })
+  const head = await client.getBlockNumber({ cacheTime: 0 })
   if (head < r.blockNumber) throw new Error('Awaiting chain confirmation')
   if (r.status !== 'success') {
     await db.transaction.updateMany({
@@ -116,11 +135,12 @@ async function indexChain() {
   }
 }
 
-export async function opportunity(id: string) {
+export async function opportunity(id: string, targetChainId?: number | null) {
   if (!/^[1-9]\d*$/.test(id)) throw new Error('Invalid opportunity ID')
-  await assertExpectedChain()
-  const opp = await chainClient.readContract({
-    address: chainConfig(),
+  const { client, address } = getChainContext(targetChainId)
+  await assertExpectedChain(targetChainId)
+  const opp = await client.readContract({
+    address,
     abi: bountyAbi,
     functionName: 'opportunities',
     args: [BigInt(id)],
@@ -148,11 +168,12 @@ export async function opportunity(id: string) {
   }
 }
 
-export async function contribution(id: string) {
+export async function contribution(id: string, targetChainId?: number | null) {
   if (!/^[1-9]\d*$/.test(id)) throw new Error('Invalid contribution ID')
-  await assertExpectedChain()
-  const sub = await chainClient.readContract({
-    address: chainConfig(),
+  const { client, address } = getChainContext(targetChainId)
+  await assertExpectedChain(targetChainId)
+  const sub = await client.readContract({
+    address,
     abi: bountyAbi,
     functionName: 'contributions',
     args: [BigInt(id)],
