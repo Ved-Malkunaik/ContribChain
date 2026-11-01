@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'wagmi'
-import { decodeFunctionData, encodeFunctionData, formatEther, type Abi, type Hash, type Hex } from 'viem'
+import { decodeFunctionData, decodeEventLog, encodeFunctionData, formatEther, type Abi, type Hash, type Hex } from 'viem'
 import { bountyAbi, contractAddress, chainId, currencySymbol, networkName } from './contract'
 import type { Project, Opportunity, Submission } from '@/types'
 import { verifyIntentTransaction, type TransactionIntent } from './transaction-intent'
@@ -109,11 +109,18 @@ export function useFeed() {
         }
       }
 
-      const serverOppIds = new Set(serverFeed.opportunities.map((o) => o.id))
       const mergedOpps: Opportunity[] = serverFeed.opportunities.map(sanitizeOpportunity)
 
       for (const lo of localOpps) {
-        if (!serverOppIds.has(lo.id) && !mergedOpps.some((o) => o.title === lo.title && o.projectId === lo.projectId)) {
+        const existing = mergedOpps.find((o) =>
+          o.id === lo.id ||
+          (o.txHash && lo.txHash && o.txHash.toLowerCase() === lo.txHash.toLowerCase()) ||
+          (o.title === lo.title && o.projectId === lo.projectId)
+        )
+        if (existing) {
+          if (!existing.txHash && lo.txHash) existing.txHash = lo.txHash
+          if (!existing.onChainId && lo.onChainId) existing.onChainId = lo.onChainId
+        } else {
           mergedOpps.push(sanitizeOpportunity(lo))
         }
       }
@@ -279,6 +286,34 @@ export function useTransaction() {
       await api('transactions/track', current, current.wallet)
       await api('transactions/reconcile', { hash: current.hash }, current.wallet)
       localStorage.removeItem(pendingKey)
+      try {
+        for (const log of receipt.logs) {
+          try {
+            const decoded = decodeEventLog({
+              abi: bountyAbi,
+              data: log.data,
+              topics: log.topics,
+            })
+            if (decoded.eventName === 'OpportunityCreated') {
+              const onChainId = Number((decoded.args as any)?.opportunityId)
+              if (!Number.isNaN(onChainId)) {
+                const storedOpps = JSON.parse(localStorage.getItem('contribchain.opportunities') || '[]')
+                const updatedOpps = storedOpps.map((o: any) => {
+                  if (
+                    o.id === receipt.transactionHash ||
+                    o.txHash?.toLowerCase() === receipt.transactionHash.toLowerCase() ||
+                    (o.metadataHash && (decoded.args as any)?.metadataHash && o.metadataHash.toLowerCase() === String((decoded.args as any).metadataHash).toLowerCase())
+                  ) {
+                    return { ...o, onChainId }
+                  }
+                  return o
+                })
+                localStorage.setItem('contribchain.opportunities', JSON.stringify(updatedOpps))
+              }
+            }
+          } catch {}
+        }
+      } catch {}
       setConfirmedData(current.data)
       try {
         setConfirmedFunction(decodeFunctionData({ abi: bountyAbi, data: current.data as Hex }).functionName)

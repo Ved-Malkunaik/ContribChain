@@ -127,8 +127,12 @@ function NewOpportunityContent({
         setCreatedTxHash(hashResult)
       }
       try {
+        const storedOpps = JSON.parse(localStorage.getItem('contribchain.opportunities') || '[]')
+        const existingStored = storedOpps.find((o: any) => o.id === (hashResult || tx.hash) || (o.txHash && o.txHash.toLowerCase() === (hashResult || tx.hash)?.toLowerCase()))
+        const onChainId = existingStored?.onChainId ?? undefined
         const oppToStore = {
           id: hashResult || `opp-${Date.now()}`,
+          onChainId,
           projectId: project?.id || projectId,
           publisherAddress: address?.toLowerCase() || '',
           title: formData.title,
@@ -146,8 +150,7 @@ function NewOpportunityContent({
           txHash: hashResult || tx.hash,
           createdAt: new Date().toISOString(),
         }
-        const storedOpps = JSON.parse(localStorage.getItem('contribchain.opportunities') || '[]')
-        const updatedOpps = [oppToStore, ...storedOpps.filter((o: any) => o.id !== oppToStore.id)]
+        const updatedOpps = [oppToStore, ...storedOpps.filter((o: any) => o.id !== oppToStore.id && (!oppToStore.txHash || o.txHash !== oppToStore.txHash))]
         localStorage.setItem('contribchain.opportunities', JSON.stringify(updatedOpps))
       } catch {}
       await cache.invalidateQueries({ queryKey: ['platform-feed'] })

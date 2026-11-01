@@ -1,6 +1,6 @@
 import { randomUUID, randomBytes, createHash } from 'node:crypto'
 import { z } from 'zod'
-import { decodeFunctionData, keccak256, toHex, isAddress, verifyMessage, type Hash } from 'viem'
+import { decodeFunctionData, decodeEventLog, keccak256, toHex, isAddress, verifyMessage, type Hash } from 'viem'
 import { db, ensureDatabaseReady } from '@/lib/server/db'
 import { appOrigin, assertOrigin, currentSession, requireWallet, demoMode } from '@/lib/server/auth'
 import { canonicalize, challengeMessage, parseRepo, parsePull, rewardWei } from '@/lib/security'
@@ -565,10 +565,155 @@ async function route(request: Request, context: { params: Promise<{ path: string
   // Submit Contribution: Records submission reference into ContribChainEscrow
   if (action === 'submissions/prepare') {
     const input = submissionInput.parse(body)
-    const opp = await db.opportunity.findFirst({
-      where: { OR: [{ id: input.opportunityId }, { onChainId: Number(input.opportunityId) || -1 }] },
+    const isNumeric = /^\d+$/.test(input.opportunityId)
+    const numId = isNumeric ? Number(input.opportunityId) : -1
+
+    let opp = await db.opportunity.findFirst({
+      where: {
+        OR: [
+          { id: input.opportunityId },
+          { txHash: input.opportunityId },
+          { metadataHash: input.opportunityId },
+          ...(isNumeric ? [{ onChainId: numId }] : []),
+        ],
+      },
       include: { project: true },
     })
+
+    if (!opp) {
+      const oppData = (body as any)?.opportunity || (body as any)?.opportunityData
+      const projData = (body as any)?.project || (body as any)?.projectData
+      if (oppData) {
+        let parentProj = oppData.projectId ? await db.project.findFirst({
+          where: { OR: [{ id: oppData.projectId }, { repoId: oppData.projectId }] }
+        }) : null
+
+        if (!parentProj && projData) {
+          const pRepoId = String(projData.repoId || 100000001)
+          const pId = projData.id || oppData.projectId || randomUUID()
+          try {
+            parentProj = await db.project.upsert({
+              where: { id: pId },
+              create: {
+                id: pId,
+                publisherAddress: (projData.publisherAddress || oppData.publisherAddress || '').toLowerCase(),
+                name: projData.name || 'Project',
+                shortDescription: projData.shortDescription || '',
+                detailedDescription: projData.detailedDescription || '',
+                category: projData.category || 'DeFi',
+                technologies: JSON.stringify(projData.technologies || []),
+                repoId: pRepoId,
+                repoUrl: projData.repoUrl || 'https://github.com',
+                liveDappUrl: projData.liveDappUrl || 'https://contrib-chain.vercel.app',
+                metadataURI: '',
+              },
+              update: {},
+            })
+          } catch {}
+        }
+
+        if (parentProj) {
+          const oppId = oppData.id || input.opportunityId
+          const onChainNum = isNumeric ? numId : (oppData.onChainId ? Number(oppData.onChainId) : null)
+          try {
+            opp = await db.opportunity.upsert({
+              where: { id: oppId },
+              create: {
+                id: oppId,
+                onChainId: onChainNum,
+                projectId: parentProj.id,
+                publisherAddress: (oppData.publisherAddress || parentProj.publisherAddress).toLowerCase(),
+                title: oppData.title || 'Opportunity',
+                taskType: oppData.taskType || 'feature',
+                description: oppData.description || '',
+                acceptanceCriteria: oppData.acceptanceCriteria || '',
+                difficulty: oppData.difficulty || 'intermediate',
+                requiredSkills: JSON.stringify(oppData.requiredSkills || []),
+                rewardEth: String(oppData.rewardEth || '0.05'),
+                rewardWei: rewardWei(String(oppData.rewardEth || '0.05')).toString(),
+                deadline: new Date(oppData.deadline || Date.now() + 86400000 * 14),
+                issueUrl: oppData.issueUrl || null,
+                metadataURI: oppData.metadataURI || '',
+                metadataHash: oppData.metadataHash || null,
+                txHash: oppData.txHash || null,
+                state: 'OPEN',
+              },
+              update: {
+                ...(onChainNum ? { onChainId: onChainNum } : {}),
+              },
+              include: { project: true },
+            })
+          } catch (restoreErr) {
+            console.warn('[submissions/prepare] Restore opportunity error:', restoreErr)
+          }
+        }
+      }
+    }
+
+    if (opp && !opp.onChainId) {
+      if (opp.txHash) {
+        try {
+          const rcpt = await chainClient.getTransactionReceipt({ hash: opp.txHash as Hash })
+          if (rcpt && rcpt.status === 'success') {
+            for (const l of rcpt.logs) {
+              try {
+                const decoded = decodeEventLog({ abi: bountyAbi, data: l.data, topics: l.topics, strict: false })
+                if (decoded.eventName === 'OpportunityCreated') {
+                  const onChainIdNum = Number((decoded.args as any)?.opportunityId)
+                  if (!Number.isNaN(onChainIdNum)) {
+                    opp = await db.opportunity.update({
+                      where: { id: opp.id },
+                      data: { onChainId: onChainIdNum, state: 'OPEN' },
+                      include: { project: true },
+                    })
+                    break
+                  }
+                }
+              } catch {}
+            }
+          }
+        } catch (rcptErr) {
+          console.warn('[submissions/prepare] Receipt lookup for opportunity onChainId:', rcptErr)
+        }
+      }
+
+      if (!opp.onChainId) {
+        try {
+          const nextId = await chainClient.readContract({
+            address: chainConfig(),
+            abi: bountyAbi,
+            functionName: 'nextOpportunityId',
+          })
+          const total = Number(nextId)
+          for (let i = total - 1; i >= 1; i--) {
+            const onChainOpp = (await chainClient.readContract({
+              address: chainConfig(),
+              abi: bountyAbi,
+              functionName: 'opportunities',
+              args: [BigInt(i)],
+            })) as any
+            if (onChainOpp && onChainOpp[10]) {
+              const onChainMeta = String(onChainOpp[2]).toLowerCase()
+              const onChainPub = String(onChainOpp[3]).toLowerCase()
+              if (
+                (opp.metadataHash && onChainMeta === opp.metadataHash.toLowerCase()) ||
+                (onChainPub === opp.publisherAddress.toLowerCase() && onChainOpp[4].toString() === opp.rewardWei)
+              ) {
+                opp = await db.opportunity.update({
+                  where: { id: opp.id },
+                  data: { onChainId: i, state: 'OPEN' },
+                  include: { project: true },
+                })
+                break
+              }
+            }
+          }
+        } catch (contractErr) {
+          console.warn('[submissions/prepare] Contract lookup for opportunity onChainId:', contractErr)
+        }
+      }
+    }
+
     if (!opp) throw new Error('Opportunity not found')
     if (!opp.onChainId) throw new Error('Opportunity funding has not been confirmed on-chain yet')
     if (opp.publisherAddress.toLowerCase() === wallet.toLowerCase() || opp.project.publisherUserId === s.userId) {
@@ -682,11 +827,14 @@ async function route(request: Request, context: { params: Promise<{ path: string
       submissionId: z.string().regex(/^[1-9]\d*$/).refine(value => Number.isSafeInteger(Number(value))).optional(),
     }).parse(body)
 
+    const isNum = /^\d+$/.test(input.opportunityId)
     const linkedOpportunity = await db.opportunity.findFirst({
       where: {
         OR: [
           { id: input.opportunityId },
-          { onChainId: /^\d+$/.test(input.opportunityId) ? Number(input.opportunityId) : -1 },
+          { txHash: input.opportunityId },
+          { metadataHash: input.opportunityId },
+          ...(isNum ? [{ onChainId: Number(input.opportunityId) }] : []),
         ],
       },
       include: { project: true },

@@ -29,14 +29,19 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
   const now = useNow()
   const oppId = use(params).id
   const { isConnected, address } = useAccount()
-  const opportunity = data.opportunities.find((o) => o.id === oppId || (!!o.onChainId && String(o.onChainId) === oppId))
+  const opportunity = data.opportunities.find((o) =>
+    o.id === oppId ||
+    (!!o.onChainId && String(o.onChainId) === oppId) ||
+    (o.txHash && o.txHash.toLowerCase() === oppId.toLowerCase()) ||
+    (o.metadataHash && o.metadataHash.toLowerCase() === oppId.toLowerCase())
+  )
   const project = opportunity
     ? data.projects.find((p) => p.id === opportunity.projectId || p.repoId === opportunity.projectId || (!!p.onChainId && String(p.onChainId) === opportunity.projectId))
     : data.projects.find((p) => p.id === oppId || p.repoId === oppId || (!!p.onChainId && String(p.onChainId) === oppId))
   const submissions = data.submissions.filter(
     (s) =>
       s.opportunityId === oppId ||
-      (opportunity && s.opportunityId === opportunity.id) ||
+      (opportunity && (s.opportunityId === opportunity.id || (opportunity.txHash && s.opportunityId === opportunity.txHash))) ||
       (opportunity?.onChainId && s.opportunityId === String(opportunity.onChainId))
   )
   const [prUrl, setPrUrl] = useState('')
@@ -54,7 +59,16 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-    try { await tx.send('submissions/prepare', { opportunityId: oppId, prUrl, notes }) }
+    try {
+      const activeOppId = opportunity?.onChainId ? String(opportunity.onChainId) : (opportunity?.id || oppId)
+      await tx.send('submissions/prepare', {
+        opportunityId: activeOppId,
+        prUrl,
+        notes,
+        opportunity: opportunity || undefined,
+        project: project || undefined,
+      })
+    }
     catch { /* TransactionStatus displays the error. */ }
     finally { setIsSubmitting(false) }
   }
