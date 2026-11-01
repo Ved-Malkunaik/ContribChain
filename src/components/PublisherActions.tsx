@@ -1,6 +1,6 @@
 'use client'
 import type { Opportunity, Submission } from '@/types'
-import { api, useTransaction, useNow, useFeed } from '@/lib/use-platform'
+import { api, useTransaction, useNow, useFeed, useActiveNetwork } from '@/lib/use-platform'
 import { useAccount } from 'wagmi'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -22,6 +22,7 @@ export function PublisherActions({
 }) {
   const { address } = useAccount()
   const { data } = useFeed()
+  const net = useActiveNetwork()
   const cache = useQueryClient()
   const [actionError, setActionError] = useState('')
   const [merging, setMerging] = useState(false)
@@ -89,15 +90,15 @@ export function PublisherActions({
                   </div>
                 </div>
                 <strong className="font-display text-3xl font-normal">
-                  {o.rewardEth} <span className="font-sans text-xs opacity-60">{currencySymbol}</span>
+                  {o.rewardEth} <span className="font-sans text-xs opacity-60">{net.currencySymbol}</span>
                 </strong>
               </div>
               <p className="text-xs mt-5 opacity-70 break-all">
-                Paid to {sub?.contributorAddress || 'the selected contributor'} · 0 {currencySymbol} remaining in escrow
+                Paid to {sub?.contributorAddress || 'the selected contributor'} · 0 {net.currencySymbol} remaining in escrow
               </p>
               <div className="cc-inline mt-5">
                 {sub?.payoutTxHash && (
-                  <a className="cc-btn cc-btn-secondary" href={`${explorerUrl}/tx/${sub.payoutTxHash}`} target="_blank" rel="noreferrer">
+                  <a className="cc-btn cc-btn-secondary" href={`${net.explorerUrl}/tx/${sub.payoutTxHash}`} target="_blank" rel="noreferrer">
                     Payment receipt on MSTScan <ArrowUpRight />
                   </a>
                 )}
@@ -115,7 +116,7 @@ export function PublisherActions({
         const ready = !!sub && isMerged && (sub.status === 'Approved' || o.state === 'Approved')
         const reason = demo
           ? ready
-            ? `Demo merge complete. Confirm the ${networkName} payout to release escrow.`
+            ? `Demo merge complete. Confirm the ${net.name} payout to release escrow.`
             : 'Winner approved. Simulate the demo PR merge, then confirm payment.'
           : !sub
           ? 'Select and approve a contribution before releasing the reward.'
@@ -142,7 +143,7 @@ export function PublisherActions({
             <div className="flex flex-wrap items-end justify-between gap-5">
               <div>
                 <span className="font-display text-4xl">{o.rewardEth}</span>
-                <span className="text-xs text-[#7e7e88] ml-2">{currencySymbol} ({networkName})</span>
+                <span className="text-xs text-[#7e7e88] ml-2">{net.currencySymbol} ({net.name})</span>
               </div>
               <span className="cc-badge">
                 <LockKeyhole className="w-3 h-3" />
@@ -151,9 +152,9 @@ export function PublisherActions({
             </div>
             {mode === 'rewards' && (
               <div className="mt-4 p-3 rounded-xl border border-white/10 bg-white/[0.02] text-xs space-y-1.5">
-                <div className="flex justify-between text-neutral-400"><span>Escrow Bounty:</span><span className="font-mono text-neutral-200">{o.rewardEth} {currencySymbol}</span></div>
-                <div className="flex justify-between text-neutral-400"><span>Platform Fee (3%):</span><span className="font-mono text-indigo-300">{(parseFloat(o.rewardEth || '0') * 0.03).toFixed(4)} {currencySymbol}</span></div>
-                <div className="flex justify-between font-medium text-white border-t border-white/10 pt-1.5"><span>Contributor Net Payout (97%):</span><span className="font-mono text-emerald-300">{(parseFloat(o.rewardEth || '0') * 0.97).toFixed(4)} {currencySymbol}</span></div>
+                <div className="flex justify-between text-neutral-400"><span>Escrow Bounty:</span><span className="font-mono text-neutral-200">{o.rewardEth} {net.currencySymbol}</span></div>
+                <div className="flex justify-between text-neutral-400"><span>Platform Fee (3%):</span><span className="font-mono text-indigo-300">{(parseFloat(o.rewardEth || '0') * 0.03).toFixed(4)} {net.currencySymbol}</span></div>
+                <div className="flex justify-between font-medium text-white border-t border-white/10 pt-1.5"><span>Contributor Net Payout (97%):</span><span className="font-mono text-emerald-300">{(parseFloat(o.rewardEth || '0') * 0.97).toFixed(4)} {net.currencySymbol}</span></div>
               </div>
             )}
             {mode === 'rewards' && (
@@ -221,7 +222,7 @@ export function PublisherActions({
               }
               className="cc-btn cc-btn-primary mt-5"
             >
-              {tx.busy ? 'Awaiting confirmation…' : mode === 'rewards' ? `Confirm & pay ${currencySymbol}` : 'Confirm escrow refund'}
+              {tx.busy ? 'Awaiting confirmation…' : mode === 'rewards' ? `Confirm & pay ${net.currencySymbol}` : 'Confirm escrow refund'}
               <ArrowUpRight />
             </button>
             <p className="text-[10px] text-[#656570] leading-6 mt-4">

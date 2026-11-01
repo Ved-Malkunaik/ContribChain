@@ -495,7 +495,8 @@ async function route(request: Request, context: { params: Promise<{ path: string
       }
     }
 
-    const latest = await chainClient.getBlock()
+    const { client: oppClient } = getChainContext(targetChainId)
+    const latest = await oppClient.getBlock()
     const deadline = latest.timestamp + BigInt(input.deadlineDays) * 86400n
     const reward = rewardWei(input.rewardEth)
 
@@ -654,9 +655,10 @@ async function route(request: Request, context: { params: Promise<{ path: string
     }
 
     if (opp && !opp.onChainId) {
+      const { client: lookupClient, address: lookupContract } = getChainContext(targetChainId)
       if (opp.txHash) {
         try {
-          const rcpt = await chainClient.getTransactionReceipt({ hash: opp.txHash as Hash })
+          const rcpt = await lookupClient.getTransactionReceipt({ hash: opp.txHash as Hash })
           if (rcpt && rcpt.status === 'success') {
             for (const l of rcpt.logs) {
               try {
@@ -682,15 +684,15 @@ async function route(request: Request, context: { params: Promise<{ path: string
 
       if (!opp.onChainId) {
         try {
-          const nextId = await chainClient.readContract({
-            address: chainConfig(),
+          const nextId = await lookupClient.readContract({
+            address: lookupContract,
             abi: bountyAbi,
             functionName: 'nextOpportunityId',
           })
           const total = Number(nextId)
           for (let i = total - 1; i >= 1; i--) {
-            const onChainOpp = (await chainClient.readContract({
-              address: chainConfig(),
+            const onChainOpp = (await lookupClient.readContract({
+              address: lookupContract,
               abi: bountyAbi,
               functionName: 'opportunities',
               args: [BigInt(i)],
@@ -746,12 +748,30 @@ async function route(request: Request, context: { params: Promise<{ path: string
       throw new Error('Publishers cannot submit contributions to their own opportunities. Only external contributors can contribute.')
     }
 
+    const { client, address: targetContract } = getChainContext(targetChainId)
     await assertExpectedChain(targetChainId)
-    const block = await chainClient.getBlock()
+    const block = await client.getBlock()
     const deadlineTimestamp = BigInt(Math.floor(opp.deadline.getTime() / 1000))
     if (deadlineTimestamp <= block.timestamp) throw new Error('Opportunity deadline has passed')
 
     const onChainOppId = String(opp.onChainId)
+
+    // Check if connected wallet already submitted on-chain to this opportunity
+    try {
+      const existingContribId = await client.readContract({
+        address: targetContract,
+        abi: bountyAbi,
+        functionName: 'contributionByWallet',
+        args: [BigInt(onChainOppId), wallet as `0x${string}`],
+      })
+      if (existingContribId && existingContribId > 0n) {
+        throw new Error(`You have already submitted a contribution for this opportunity (Contribution #${existingContribId.toString()}). Only one submission is permitted per wallet.`)
+      }
+    } catch (checkErr: any) {
+      if (checkErr.message?.includes('already submitted') || checkErr.message?.includes('Already submitted')) {
+        throw checkErr
+      }
+    }
     const url = parsePull(input.prUrl)
     const projectRepo = parseRepo(opp.project.repoUrl)
     if (projectRepo.owner.toLowerCase() !== url.owner.toLowerCase() || projectRepo.repo.toLowerCase() !== url.repo.toLowerCase()) {
@@ -780,12 +800,20 @@ async function route(request: Request, context: { params: Promise<{ path: string
     const prTitle = pr.title
     const authorLogin = pr.user.login
     const authorGithubId = String(pr.user.id)
+    const contractAddrLower = targetContract.toLowerCase()
 
     await db.$transaction(async tx => {
-      await tx.verifiedSubmission.create({
-        data: {
+      await tx.verifiedSubmission.upsert({
+        where: {
+          chainAddress_repoId_prNumber: {
+            chainAddress: contractAddrLower,
+            repoId,
+            prNumber: url.number,
+          },
+        },
+        create: {
           id,
-          chainAddress: chainConfig().toLowerCase(),
+          chainAddress: contractAddrLower,
           opportunityId: onChainOppId,
           wallet,
           githubId: authorGithubId,
@@ -801,26 +829,68 @@ async function route(request: Request, context: { params: Promise<{ path: string
           syncedAt: new Date(),
           nextSyncAt: new Date(Date.now() + 15000),
         },
-      })
-      await tx.submission.create({
-        data: {
-          id,
-          opportunityId: opp.id,
-          contributorUserId: profileUserId,
-          contributorAddress: wallet,
-          githubUsername: authorLogin,
-          githubUserId: authorGithubId,
-          prUrl: pr.html_url,
-          prNumber: url.number,
-          repoOwner: url.owner,
-          repoName: url.repo,
+        update: {
+          opportunityId: onChainOppId,
+          wallet,
+          githubId: authorGithubId,
           notes: input.notes,
-          status: 'PENDING',
-          isMerged: pr.merged,
-          mergedAt: pr.merged_at ? new Date(pr.merged_at) : null,
-          latestCommitSha: pr.head.sha,
+          prState: pr.merged ? 'merged' : pr.state,
+          commit: pr.head.sha,
+          syncedAt: new Date(),
+          nextSyncAt: new Date(Date.now() + 15000),
         },
       })
+
+      const existingSub = await tx.submission.findFirst({
+        where: {
+          OR: [
+            { repoOwner: url.owner, repoName: url.repo, prNumber: url.number },
+            { opportunityId: opp.id, contributorAddress: wallet },
+          ],
+        },
+      })
+
+      if (existingSub) {
+        await tx.submission.update({
+          where: { id: existingSub.id },
+          data: {
+            opportunityId: opp.id,
+            contributorUserId: profileUserId,
+            contributorAddress: wallet,
+            githubUsername: authorLogin,
+            githubUserId: authorGithubId,
+            prUrl: pr.html_url,
+            prNumber: url.number,
+            repoOwner: url.owner,
+            repoName: url.repo,
+            notes: input.notes,
+            status: 'PENDING',
+            isMerged: pr.merged,
+            mergedAt: pr.merged_at ? new Date(pr.merged_at) : null,
+            latestCommitSha: pr.head.sha,
+          },
+        })
+      } else {
+        await tx.submission.create({
+          data: {
+            id,
+            opportunityId: opp.id,
+            contributorUserId: profileUserId,
+            contributorAddress: wallet,
+            githubUsername: authorLogin,
+            githubUserId: authorGithubId,
+            prUrl: pr.html_url,
+            prNumber: url.number,
+            repoOwner: url.owner,
+            repoName: url.repo,
+            notes: input.notes,
+            status: 'PENDING',
+            isMerged: pr.merged,
+            mergedAt: pr.merged_at ? new Date(pr.merged_at) : null,
+            latestCommitSha: pr.head.sha,
+          },
+        })
+      }
     })
 
     return response({
@@ -853,6 +923,7 @@ async function route(request: Request, context: { params: Promise<{ path: string
       submissionId: z.string().optional(),
     }).parse(body)
 
+    const { client: actionClient, address: actionContract } = getChainContext(targetChainId)
     const isNum = /^\d+$/.test(input.opportunityId)
     let linkedOpportunity = await db.opportunity.findFirst({
       where: {
@@ -866,6 +937,30 @@ async function route(request: Request, context: { params: Promise<{ path: string
       include: { project: true },
     }).catch(() => null)
 
+    if (linkedOpportunity && !linkedOpportunity.onChainId && linkedOpportunity.txHash) {
+      try {
+        const rcpt = await actionClient.getTransactionReceipt({ hash: linkedOpportunity.txHash as Hash })
+        if (rcpt && rcpt.status === 'success') {
+          for (const l of rcpt.logs) {
+            try {
+              const decoded = decodeEventLog({ abi: bountyAbi, data: l.data, topics: l.topics, strict: false })
+              if (decoded.eventName === 'OpportunityCreated') {
+                const onChainIdNum = Number((decoded.args as any)?.opportunityId)
+                if (!Number.isNaN(onChainIdNum)) {
+                  linkedOpportunity = await db.opportunity.update({
+                    where: { id: linkedOpportunity.id },
+                    data: { onChainId: onChainIdNum, state: 'OPEN' },
+                    include: { project: true },
+                  })
+                  break
+                }
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+    }
+
     const chainOpportunityId = isNum ? input.opportunityId : (linkedOpportunity?.onChainId ? String(linkedOpportunity.onChainId) : '')
     if (!chainOpportunityId) throw new Error('Opportunity funding has not been confirmed on-chain yet')
     const chainOpp = await opportunity(chainOpportunityId, targetChainId)
@@ -875,22 +970,44 @@ async function route(request: Request, context: { params: Promise<{ path: string
     let targetFunction: string
     let args: string[]
 
-    if (input.action === 'approveSubmission' || input.action === 'approveContribution') {
-      if (!input.submissionId) throw new Error('Submission ID is required for approval')
-      const candidate = await chainContribution(input.submissionId, targetChainId)
+    if (input.action === 'approveSubmission' || input.action === 'approveContribution' || input.action === 'rejectSubmission' || input.action === 'rejectContribution') {
+      if (!input.submissionId) throw new Error('Submission ID is required for this action')
+      let chainSubmissionId = /^\d+$/.test(input.submissionId) ? input.submissionId : ''
+      if (!chainSubmissionId) {
+        const subRecord = await db.submission.findUnique({ where: { id: input.submissionId } }).catch(() => null)
+        if (subRecord?.onChainId) {
+          chainSubmissionId = String(subRecord.onChainId)
+        } else if (subRecord?.contributorAddress) {
+          try {
+            const onChainContribId = await actionClient.readContract({
+              address: actionContract,
+              abi: bountyAbi,
+              functionName: 'contributionByWallet',
+              args: [BigInt(chainOpportunityId), subRecord.contributorAddress as `0x${string}`],
+            })
+            if (onChainContribId && onChainContribId > 0n) {
+              chainSubmissionId = onChainContribId.toString()
+              await db.submission.update({
+                where: { id: subRecord.id },
+                data: { onChainId: Number(onChainContribId) },
+              }).catch(() => {})
+            }
+          } catch {}
+        }
+      }
+
+      if (!chainSubmissionId) {
+        throw new Error('This contribution has not been confirmed on the escrow smart contract yet. The contributor must sign the wallet transaction first.')
+      }
+
+      const candidate = await chainContribution(chainSubmissionId, targetChainId)
       if (!candidate.exists || candidate.opportunityId !== BigInt(chainOpportunityId)) {
         throw new Error('Contribution is not a pending submission for this opportunity')
       }
-      targetFunction = 'approveContribution'
-      args = [input.submissionId]
-    } else if (input.action === 'rejectSubmission' || input.action === 'rejectContribution') {
-      if (!input.submissionId) throw new Error('Submission ID is required for rejection')
-      const candidate = await chainContribution(input.submissionId, targetChainId)
-      if (!candidate.exists || candidate.opportunityId !== BigInt(chainOpportunityId)) {
-        throw new Error('Contribution is not a pending submission for this opportunity')
-      }
-      targetFunction = 'rejectContribution'
-      args = [input.submissionId]
+      targetFunction = (input.action === 'approveSubmission' || input.action === 'approveContribution')
+        ? 'approveContribution'
+        : 'rejectContribution'
+      args = [chainSubmissionId]
     } else if (input.action === 'releaseReward') {
       targetFunction = 'releaseReward'
       args = [chainOpportunityId]

@@ -78,7 +78,7 @@ export default function PublisherHubPage() {
       {!mounted || !isConnected || !address ? (
         <EmptyState
           title="Your workspace starts with your wallet."
-          description="Connect your BridgeKey or injected wallet from the navigation to see your projects, review contributions and manage {networkName} escrow."
+          description={`Connect your BridgeKey or injected wallet from the navigation to see your projects, review contributions and manage ${net.name} escrow.`}
           action={
             <span className="cc-badge">
               <Wallet size={14} /> Wallet connection required
@@ -99,7 +99,7 @@ export default function PublisherHubPage() {
             <div className="cc-stat">
               <p>Locked in escrow</p>
               <strong>{totalEscrow}</strong>
-              <small>{currencySymbol} ({networkName.toUpperCase()})</small>
+              <small>{net.currencySymbol} ({net.name.toUpperCase()})</small>
             </div>
             <div className="cc-stat">
               <p>Awaiting review</p>
@@ -167,7 +167,7 @@ export default function PublisherHubPage() {
                       {opportunities.filter(opportunity => opportunity.projectId === project.id && opportunity.txHash).map(opportunity => (
                         <a
                           key={opportunity.id + '-escrow-tx'}
-                          href={`${explorerUrl}/tx/${opportunity.txHash}`}
+                          href={`${net.explorerUrl}/tx/${opportunity.txHash}`}
                           target="_blank"
                           rel="noreferrer"
                           className="flex max-w-full flex-wrap items-center gap-2 text-[11px] text-indigo-300 hover:text-indigo-200"
@@ -230,7 +230,7 @@ export default function PublisherHubPage() {
                       {presentation.status === 'Paid' ? (
                         <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.04] p-5 space-y-3">
                           <p className="flex items-center gap-2 font-semibold text-emerald-300">
-                            <CheckCircle2 size={18} /> Reward paid · confirmed on {networkName}
+                            <CheckCircle2 size={18} /> Reward paid · confirmed on {net.name}
                           </p>
                           <p className="text-3xl font-semibold tracking-tight">
                             {presentation.rewardEth ?? '—'} <span className="text-base font-normal text-neutral-400">{net.currencySymbol}</span>

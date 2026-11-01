@@ -106,8 +106,8 @@ export function getNetworkConfig(targetChainId?: number | null): NetworkConfig {
       rpcUrl: getTestnetRpcUrl(),
       explorerUrl: 'https://testnet.mstscan.com',
       isMainnet: false,
-      freshStartOppMinId: 9n,
-      freshStartContribMinId: 1n,
+      freshStartOppMinId: 10n,
+      freshStartContribMinId: 6n,
     }
   }
   return {
