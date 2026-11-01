@@ -72,6 +72,7 @@ export interface Submission {
   lastSyncedAt?: string
   syncError?: string
   verifiedRecordId?: string
+  txHash?: string
 }
 
 export interface UserIdentity {

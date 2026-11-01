@@ -125,7 +125,7 @@ export async function feed() {
     'test dapp',
   ])
   const mockProjectIds = new Set(['proj-1', 'proj-2', 'proj-3', 'cmvc9booi00017aw0yi9ytmcr'])
-  const mockOppTitles = new Set([
+  const mockOppTitles = isMainnet ? new Set<string>() : new Set([
     'refactor ui components & state management',
     'enhance poll analytics & export',
     'gas-optimized twap hook with dynamic tick intervals',
@@ -139,14 +139,14 @@ export async function feed() {
     'stellarpoll feature #6',
     'stellarpoll feature #7',
   ])
-  const mockOppIds = new Set([
+  const mockOppIds = isMainnet ? new Set(['opp-1', 'opp-2']) : new Set([
     'opp-1', 'opp-2', '60405f67-d042-40da-b3e9-90b96a4a3173',
     'onchain-opp-1', 'onchain-opp-2', 'onchain-opp-3', 'onchain-opp-4', 'onchain-opp-5', 'onchain-opp-6', 'onchain-opp-7',
   ])
 
   empty.projects = mappedProjects.filter(p => !mockProjectIds.has(p.id) && !mockProjectNames.has(p.name.toLowerCase().trim()))
-  empty.opportunities = mappedOpps.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()) && (!o.onChainId || o.onChainId >= 8))
-  empty.submissions = mappedSubs.filter(s => (!s.onChainId || s.onChainId >= 5) && !mockOppIds.has(s.opportunityId))
+  empty.opportunities = mappedOpps.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()) && (!o.onChainId || isMainnet || o.onChainId >= 8))
+  empty.submissions = mappedSubs.filter(s => (!s.onChainId || isMainnet || s.onChainId >= 5) && !mockOppIds.has(s.opportunityId))
 
   // 2. Synchronize with live escrow contract if configured
   if (configured) {
@@ -217,7 +217,11 @@ export async function feed() {
         const statusNum = Number(onChain[9])
         const stateStr: Opportunity['state'] = statusNum === 1 ? 'Open' : statusNum === 2 ? 'Approved' : statusNum === 3 ? 'Paid' : statusNum === 4 ? 'Refunded' : 'Open'
 
-        const existing = empty.opportunities.find(o => o.onChainId === oppIdNum || (o.metadataHash && o.metadataHash.toLowerCase() === onChainMetadataHash))
+        const existing = empty.opportunities.find(o =>
+          o.onChainId === oppIdNum ||
+          (o.metadataHash && o.metadataHash.toLowerCase() === onChainMetadataHash) ||
+          (o.publisherAddress.toLowerCase() === publisherAddr && o.rewardEth === reward)
+        )
         if (existing) {
           existing.onChainId = oppIdNum
           existing.rewardEth = reward
@@ -338,7 +342,14 @@ export async function feed() {
         const contribStatus: Submission['status'] =
           contribStatusNum === 1 ? 'Pending' : contribStatusNum === 2 ? 'Approved' : contribStatusNum === 3 ? 'Rejected' : contribStatusNum === 4 ? 'Paid' : 'Pending'
 
-        const existingSub = empty.submissions.find(s => s.onChainId === contribIdNum || s.id === `contrib-${j}`)
+        const existingSub = empty.submissions.find(s =>
+          s.onChainId === contribIdNum ||
+          s.id === `contrib-${j}` ||
+          (s.contributorAddress.toLowerCase() === contributorAddr && (
+            s.opportunityId === contribOppIdStr ||
+            empty.opportunities.find(o => o.onChainId === Number(c[1]))?.id === s.opportunityId
+          ))
+        )
         if (existingSub) {
           existingSub.onChainId = contribIdNum
           existingSub.status = contribStatus
@@ -352,6 +363,8 @@ export async function feed() {
               ],
             },
           }).catch(() => null)
+
+          if (!v) continue
 
           const repoUrl = defaultProject?.repoUrl || 'https://github.com/Ved-Malkunaik/StellarPoll'
           const prNumber = v?.prNumber || 1
@@ -520,8 +533,8 @@ export async function feed() {
   }
 
   empty.projects = empty.projects.filter(p => !mockProjectIds.has(p.id) && !mockProjectNames.has(p.name.toLowerCase().trim()))
-  empty.opportunities = empty.opportunities.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()) && (!o.onChainId || o.onChainId >= 8))
-  empty.submissions = empty.submissions.filter(s => (!s.onChainId || s.onChainId >= 5) && !mockOppIds.has(s.opportunityId))
+  empty.opportunities = empty.opportunities.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()) && (!o.onChainId || isMainnet || o.onChainId >= 8))
+  empty.submissions = empty.submissions.filter(s => (!s.onChainId || isMainnet || s.onChainId >= 5) && !mockOppIds.has(s.opportunityId))
 
   // 3. Compute stats
   for (const p of empty.projects) {

@@ -3,6 +3,8 @@
 import { use, useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useAccount } from 'wagmi'
+import { useQueryClient } from '@tanstack/react-query'
+import type { Submission } from '@/types'
 import { Calendar, ChevronRight, GitPullRequest, CheckCircle2, Clock, ExternalLink, ShieldCheck, Send, Lock, ArrowLeft } from 'lucide-react'
 import { SubmissionProgress } from '@/components/SubmissionProgress'
 import { EscrowReadout } from '@/components/EscrowReadout'
@@ -27,6 +29,7 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
   const { data, isLoading } = useFeed()
   const tx = useTransaction()
   const now = useNow()
+  const client = useQueryClient()
   const oppId = use(params).id
   const { isConnected, address } = useAccount()
   const opportunity = data.opportunities.find((o) =>
@@ -38,12 +41,19 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
   const project = opportunity
     ? data.projects.find((p) => p.id === opportunity.projectId || p.repoId === opportunity.projectId || (!!p.onChainId && String(p.onChainId) === opportunity.projectId))
     : data.projects.find((p) => p.id === oppId || p.repoId === oppId || (!!p.onChainId && String(p.onChainId) === oppId))
-  const submissions = data.submissions.filter(
-    (s) =>
-      s.opportunityId === oppId ||
-      (opportunity && (s.opportunityId === opportunity.id || (opportunity.txHash && s.opportunityId === opportunity.txHash))) ||
-      (opportunity?.onChainId && s.opportunityId === String(opportunity.onChainId))
-  )
+  const submissions = data.submissions.filter((s) => {
+    if (!s) return false
+    const sOppId = String(s.opportunityId || '').toLowerCase()
+    const targetOppId = oppId.toLowerCase()
+    if (sOppId === targetOppId) return true
+    if (opportunity) {
+      if (sOppId === opportunity.id.toLowerCase()) return true
+      if (opportunity.txHash && sOppId === opportunity.txHash.toLowerCase()) return true
+      if (opportunity.metadataHash && sOppId === opportunity.metadataHash.toLowerCase()) return true
+      if (opportunity.onChainId && sOppId === String(opportunity.onChainId)) return true
+    }
+    return false
+  })
   const [prUrl, setPrUrl] = useState('')
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -61,13 +71,37 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
     setIsSubmitting(true)
     try {
       const activeOppId = opportunity?.onChainId ? String(opportunity.onChainId) : (opportunity?.id || oppId)
-      await tx.send('submissions/prepare', {
+      const hashResult = await tx.send('submissions/prepare', {
         opportunityId: activeOppId,
         prUrl,
         notes,
         opportunity: opportunity || undefined,
         project: project || undefined,
       })
+      const parsedNumber = parseInt(prUrl.split('/').pop() || '1', 10) || 1
+      const newSub: Submission = {
+        id: hashResult || `sub-${Date.now()}`,
+        opportunityId: opportunity?.id || oppId,
+        onChainId: 0,
+        contributorAddress: address?.toLowerCase() || '',
+        githubUsername: address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Contributor',
+        githubPrUrl: prUrl,
+        prNumber: parsedNumber,
+        prTitle: `Pull Request #${parsedNumber}`,
+        prState: 'open',
+        status: 'Pending',
+        notes: notes || undefined,
+        createdAt: new Date().toISOString(),
+        identityVerified: false,
+        demo: false,
+        txHash: hashResult || tx.hash,
+      }
+      try {
+        const storedSubs = JSON.parse(localStorage.getItem('contribchain.submissions') || '[]')
+        const updatedSubs = [newSub, ...storedSubs.filter((s: any) => s.id !== newSub.id && (!newSub.txHash || s.txHash !== newSub.txHash))]
+        localStorage.setItem('contribchain.submissions', JSON.stringify(updatedSubs))
+      } catch {}
+      await client.invalidateQueries({ queryKey: ['platform-feed'] })
     }
     catch { /* TransactionStatus displays the error. */ }
     finally { setIsSubmitting(false) }

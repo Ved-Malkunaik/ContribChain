@@ -76,11 +76,13 @@ export function useFeed() {
     queryFn: async () => {
       let localProjects: any[] = []
       let localOpps: any[] = []
+      let localSubs: any[] = []
       let cachedFeed: Feed | null = null
       try {
         if (typeof window !== 'undefined') {
           localProjects = JSON.parse(localStorage.getItem('contribchain.projects') || '[]')
           localOpps = JSON.parse(localStorage.getItem('contribchain.opportunities') || '[]')
+          localSubs = JSON.parse(localStorage.getItem('contribchain.submissions') || '[]')
           cachedFeed = JSON.parse(localStorage.getItem('contribchain.cached_feed') || 'null')
         }
       } catch {}
@@ -125,10 +127,26 @@ export function useFeed() {
         }
       }
 
+      const mergedSubs: Submission[] = [...serverFeed.submissions]
+      for (const ls of localSubs) {
+        const existing = mergedSubs.find((s) =>
+          s.id === ls.id ||
+          (s.txHash && ls.txHash && s.txHash.toLowerCase() === ls.txHash.toLowerCase()) ||
+          (s.githubPrUrl && ls.githubPrUrl && s.githubPrUrl.toLowerCase() === ls.githubPrUrl.toLowerCase() && String(s.opportunityId) === String(ls.opportunityId))
+        )
+        if (existing) {
+          if (!existing.txHash && ls.txHash) existing.txHash = ls.txHash
+          if (!existing.onChainId && ls.onChainId) existing.onChainId = ls.onChainId
+        } else {
+          mergedSubs.push(ls)
+        }
+      }
+
       const combined: Feed = {
         ...serverFeed,
         projects: mergedProjects,
         opportunities: mergedOpps,
+        submissions: mergedSubs,
       }
 
       try {
@@ -309,6 +327,24 @@ export function useTransaction() {
                   return o
                 })
                 localStorage.setItem('contribchain.opportunities', JSON.stringify(updatedOpps))
+              }
+            }
+            if (decoded.eventName === 'ContributionSubmitted') {
+              const contributionId = Number((decoded.args as any)?.contributionId)
+              const oppIdOnChain = (decoded.args as any)?.opportunityId ? String((decoded.args as any).opportunityId) : ''
+              if (!Number.isNaN(contributionId)) {
+                const storedSubs = JSON.parse(localStorage.getItem('contribchain.submissions') || '[]')
+                const updatedSubs = storedSubs.map((s: any) => {
+                  if (
+                    s.id === receipt.transactionHash ||
+                    s.txHash?.toLowerCase() === receipt.transactionHash.toLowerCase() ||
+                    (oppIdOnChain && String(s.opportunityId) === oppIdOnChain)
+                  ) {
+                    return { ...s, onChainId: contributionId }
+                  }
+                  return s
+                })
+                localStorage.setItem('contribchain.submissions', JSON.stringify(updatedSubs))
               }
             }
           } catch {}

@@ -277,6 +277,53 @@ async function route(request: Request, context: { params: Promise<{ path: string
     return response({ linked: true })
   }
 
+  if (action === 'projects/sync') {
+    const session = await currentSession(request).catch(() => null)
+    const walletHeader = request.headers.get('x-wallet-address')?.toLowerCase() || session?.wallet?.toLowerCase() || ''
+    const syncProjects = Array.isArray((body as any)?.projects) ? (body as any).projects : []
+    for (const p of syncProjects) {
+      if (!p || !p.id || !p.name) continue
+      try {
+        const pId = String(p.id)
+        const repoId = String(p.repoId || Math.abs(createHash('sha256').update(String(p.repoUrl || pId)).digest().readInt32BE(0)) || 100000001)
+        const rawTechs = p.technologies
+        const techs = Array.isArray(rawTechs)
+          ? rawTechs
+          : typeof rawTechs === 'string'
+          ? rawTechs.split(',').map((x: string) => x.trim()).filter(Boolean)
+          : []
+        const uri = `${appOrigin()}/api/platform/metadata/${pId}`
+        const hash = keccak256(toHex(canonicalize({ ...p, id: pId })))
+        const pubAddr = (p.publisherAddress || walletHeader || '').toLowerCase()
+        await db.project.upsert({
+          where: { id: pId },
+          create: {
+            id: pId,
+            publisherUserId: session?.userId || null,
+            publisherAddress: pubAddr,
+            name: p.name,
+            shortDescription: p.shortDescription || '',
+            detailedDescription: p.detailedDescription || '',
+            category: p.category || 'DeFi',
+            technologies: JSON.stringify(techs),
+            repoId,
+            repoUrl: p.repoUrl || 'https://github.com',
+            liveDappUrl: p.liveDappUrl || 'https://contrib-chain.vercel.app',
+            demoVideoUrl: p.demoVideoUrl || null,
+            metadataURI: uri,
+            metadataHash: hash,
+          },
+          update: {
+            ...(pubAddr ? { publisherAddress: pubAddr } : {}),
+          },
+        })
+      } catch (err) {
+        console.warn('[projects/sync] Upsert notice:', err)
+      }
+    }
+    return response({ synced: true })
+  }
+
   const s = await requireWallet(request)
   const wallet = s.wallet!
   const walletLink = await db.walletLink.findUnique({ where: { address: wallet } }).catch(() => null)
@@ -343,50 +390,6 @@ async function route(request: Request, context: { params: Promise<{ path: string
       intentId: m.id,
       message: 'Project registered off-chain successfully',
     })
-  }
-
-  if (action === 'projects/sync') {
-    const syncProjects = Array.isArray((body as any)?.projects) ? (body as any).projects : []
-    for (const p of syncProjects) {
-      if (!p || !p.id || !p.name) continue
-      try {
-        const pId = String(p.id)
-        const repoId = String(p.repoId || Math.abs(createHash('sha256').update(String(p.repoUrl || pId)).digest().readInt32BE(0)) || 100000001)
-        const rawTechs = p.technologies
-        const techs = Array.isArray(rawTechs)
-          ? rawTechs
-          : typeof rawTechs === 'string'
-          ? rawTechs.split(',').map((x: string) => x.trim()).filter(Boolean)
-          : []
-        const uri = `${appOrigin()}/api/platform/metadata/${pId}`
-        const hash = keccak256(toHex(canonicalize({ ...p, id: pId })))
-        await db.project.upsert({
-          where: { id: pId },
-          create: {
-            id: pId,
-            publisherUserId: profileUserId,
-            publisherAddress: (p.publisherAddress || wallet).toLowerCase(),
-            name: p.name,
-            shortDescription: p.shortDescription || '',
-            detailedDescription: p.detailedDescription || '',
-            category: p.category || 'DeFi',
-            technologies: JSON.stringify(techs),
-            repoId,
-            repoUrl: p.repoUrl || 'https://github.com',
-            liveDappUrl: p.liveDappUrl || 'https://contrib-chain.vercel.app',
-            demoVideoUrl: p.demoVideoUrl || null,
-            metadataURI: uri,
-            metadataHash: hash,
-          },
-          update: {
-            publisherAddress: (p.publisherAddress || wallet).toLowerCase(),
-          },
-        })
-      } catch (err) {
-        console.warn('[projects/sync] Upsert notice:', err)
-      }
-    }
-    return response({ synced: true })
   }
 
   // Create Opportunity: Atomic on-chain funding into ContribChainEscrow on MST Testnet

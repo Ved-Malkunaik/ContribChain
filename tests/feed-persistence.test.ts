@@ -9,6 +9,8 @@ const databaseUrl = `file:${join(directory, 'shared.db').replace(/\\/g, '/')}`
 process.env.DATABASE_URL = databaseUrl
 process.env.MST_RPC_URL = 'http://127.0.0.1:1'
 process.env.NEXT_PUBLIC_MST_RPC_URL = 'http://127.0.0.1:1'
+delete process.env.NEXT_PUBLIC_MSTC_RPC_URL
+delete process.env.MSTC_RPC_URL
 
 const { db } = await import('../src/lib/server/db.ts')
 const { feed } = await import('../src/lib/server/feed.ts')
