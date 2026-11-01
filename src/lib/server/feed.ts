@@ -134,9 +134,15 @@ export async function feed(targetChainId?: number | null) {
     'safe account modules',
     'test dapp',
     'stellarpoll',
-    'web3 dapp store',
   ])
-  const mockProjectIds = new Set(['proj-1', 'proj-2', 'proj-3', 'cmvc9booi00017aw0yi9ytmcr', '69f67dba-3838-4578-8ae8-cae0b2eb7de6'])
+  const mockProjectIds = new Set([
+    'proj-1',
+    'proj-2',
+    'proj-3',
+    'cmvc9booi00017aw0yi9ytmcr',
+    '69f67dba-3838-4578-8ae8-cae0b2eb7de6',
+    'f9be845b-8773-4dd2-92b7-e3bb89deee19',
+  ])
   const mockOppTitles = new Set([
     'refactor ui components & state management',
     'enhance poll analytics & export',
@@ -150,7 +156,6 @@ export async function feed(targetChainId?: number | null) {
     'stellarpoll feature #5',
     'stellarpoll feature #6',
     'stellarpoll feature #7',
-    'update readme file',
   ])
   const mockOppIds = new Set([
     'opp-1', 'opp-2', '60405f67-d042-40da-b3e9-90b96a4a3173', '0946ff23-488d-4ba4-b56a-46887c06219d',

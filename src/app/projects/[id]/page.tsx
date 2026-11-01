@@ -33,8 +33,7 @@ function ProjectContent({ params }: { params: Promise<{ id: string }> }) {
   const project = data.projects.find((p) =>
     p.id === projectId ||
     p.repoId === projectId ||
-    (!!p.onChainId && String(p.onChainId) === projectId) ||
-    (isMainnet && (p.name.toLowerCase() === 'web3 dapp store' || projectId === '69f67dba-3838-4578-8ae8-cae0b2eb7de6' || projectId === 'aefcbf12-a27f-4ec2-917d-1d02323640be'))
+    (!!p.onChainId && String(p.onChainId) === projectId)
   )
   const opportunities = data.opportunities.filter((o) => o.projectId === projectId || (project && o.projectId === project.id))
   const isPublisher = mounted && !!address && !!project && address.toLowerCase() === project.publisherAddress.toLowerCase()

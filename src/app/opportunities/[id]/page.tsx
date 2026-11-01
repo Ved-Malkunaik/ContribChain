@@ -37,8 +37,7 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
     o.id === oppId ||
     (!!o.onChainId && String(o.onChainId) === oppId) ||
     (o.txHash && o.txHash.toLowerCase() === oppId.toLowerCase()) ||
-    (o.metadataHash && o.metadataHash.toLowerCase() === oppId.toLowerCase()) ||
-    (oppId.startsWith('0x') && o.onChainId === 2)
+    (o.metadataHash && o.metadataHash.toLowerCase() === oppId.toLowerCase())
   )
   const project = opportunity
     ? data.projects.find((p) => p.id === opportunity.projectId || p.repoId === opportunity.projectId || (!!p.onChainId && String(p.onChainId) === opportunity.projectId))

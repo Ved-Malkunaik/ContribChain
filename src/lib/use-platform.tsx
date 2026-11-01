@@ -18,7 +18,7 @@ import type { Project, Opportunity, Submission } from '@/types'
 import { verifyIntentTransaction, type TransactionIntent } from './transaction-intent'
 import { isConfirmedTransactionFor } from './transaction-confirmation'
 
-const STORAGE_VERSION = 'v9_fresh_start'
+const STORAGE_VERSION = 'v10_global_sync'
 if (typeof window !== 'undefined') {
   try {
     if (localStorage.getItem('contribchain.storage_version') !== STORAGE_VERSION) {
