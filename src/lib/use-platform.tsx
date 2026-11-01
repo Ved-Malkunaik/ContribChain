@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAccount, usePublicClient, useSignMessage, useWriteContract } from 'wagmi'
 import { decodeFunctionData, decodeEventLog, encodeFunctionData, formatEther, type Abi, type Hash, type Hex } from 'viem'
-import { bountyAbi, contractAddress, chainId, currencySymbol, networkName } from './contract'
+import { bountyAbi, contractAddress, chainId, currencySymbol, networkName, isMainnet } from './contract'
 import type { Project, Opportunity, Submission } from '@/types'
 import { verifyIntentTransaction, type TransactionIntent } from './transaction-intent'
 import { isConfirmedTransactionFor } from './transaction-confirmation'
@@ -114,14 +114,27 @@ export function useFeed() {
       const mergedOpps: Opportunity[] = serverFeed.opportunities.map(sanitizeOpportunity)
 
       for (const lo of localOpps) {
+        const titleLower = String(lo.title || '').toLowerCase()
+        if (
+          titleLower.includes('stellarpoll feature') ||
+          titleLower.includes('refactor ui') ||
+          titleLower.includes('enhance poll') ||
+          titleLower.includes('gas-optimized') ||
+          titleLower.includes('cross-chain')
+        ) {
+          continue
+        }
         const existing = mergedOpps.find((o) =>
           o.id === lo.id ||
+          (o.onChainId && lo.onChainId && o.onChainId === lo.onChainId) ||
+          (isMainnet && (o.onChainId === 2 || lo.onChainId === 2) && (lo.rewardEth === '0.06' || titleLower.includes('landing page'))) ||
           (o.txHash && lo.txHash && o.txHash.toLowerCase() === lo.txHash.toLowerCase()) ||
           (o.title === lo.title && o.projectId === lo.projectId)
         )
         if (existing) {
           if (!existing.txHash && lo.txHash) existing.txHash = lo.txHash
           if (!existing.onChainId && lo.onChainId) existing.onChainId = lo.onChainId
+          if (lo.title && !existing.title) existing.title = lo.title
         } else {
           mergedOpps.push(sanitizeOpportunity(lo))
         }
@@ -131,12 +144,16 @@ export function useFeed() {
       for (const ls of localSubs) {
         const existing = mergedSubs.find((s) =>
           s.id === ls.id ||
+          (s.onChainId && ls.onChainId && s.onChainId === ls.onChainId) ||
+          (isMainnet && (s.onChainId === 1 || ls.onChainId === 1)) ||
           (s.txHash && ls.txHash && s.txHash.toLowerCase() === ls.txHash.toLowerCase()) ||
-          (s.githubPrUrl && ls.githubPrUrl && s.githubPrUrl.toLowerCase() === ls.githubPrUrl.toLowerCase() && String(s.opportunityId) === String(ls.opportunityId))
+          (s.githubPrUrl && ls.githubPrUrl && s.githubPrUrl.toLowerCase() === ls.githubPrUrl.toLowerCase())
         )
         if (existing) {
           if (!existing.txHash && ls.txHash) existing.txHash = ls.txHash
           if (!existing.onChainId && ls.onChainId) existing.onChainId = ls.onChainId
+          if (ls.githubPrUrl && !existing.githubPrUrl) existing.githubPrUrl = ls.githubPrUrl
+          if (ls.notes && !existing.notes) existing.notes = ls.notes
         } else {
           mergedSubs.push(ls)
         }

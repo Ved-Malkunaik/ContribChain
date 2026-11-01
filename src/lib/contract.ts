@@ -84,7 +84,7 @@ export const mstMainnet = defineChain({
 export const activeChain = isMainnet ? mstMainnet : mstTestnet
 export const chainId = activeChain.id
 export const networkName = activeChain.name
-export const currencySymbol = (process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || activeChain.nativeCurrency.symbol) as string
+export const currencySymbol = isMainnet ? 'MSTC' : ((process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || activeChain.nativeCurrency.symbol) as string)
 export function getExplorerUrl(mainnet: boolean): string {
   const candidates = [
     process.env.NEXT_PUBLIC_MST_EXPLORER_URL,

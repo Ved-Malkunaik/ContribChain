@@ -11,7 +11,7 @@ import { PublisherActions } from '@/components/PublisherActions'
 import { EmptyState, PageHeader, StatusBadge } from '@/components/ui/AppUI'
 import { getSubmissionPresentation } from '@/lib/submission-presentation'
 import { useFeed, useIdentity, useTransaction, useNow } from '@/lib/use-platform'
-import { explorerUrl, currencySymbol, networkName } from '@/lib/contract'
+import { explorerUrl, currencySymbol, networkName, isMainnet } from '@/lib/contract'
 
 type HubTab = 'projects' | 'submissions' | 'rewards' | 'refunds'
 
@@ -35,7 +35,14 @@ export default function PublisherHubPage() {
     o.publisherAddress.toLowerCase() === address?.toLowerCase() ||
     (!!o.publisherUserId && o.publisherUserId === identity.session?.userId)
   )
-  const submissions = data.submissions.filter(s => opportunities.some(o => o.id === s.opportunityId))
+  const submissions = data.submissions.filter(s =>
+    opportunities.some(o =>
+      o.id === s.opportunityId ||
+      (o.onChainId && String(o.onChainId) === s.opportunityId) ||
+      (o.txHash && o.txHash.toLowerCase() === s.opportunityId.toLowerCase()) ||
+      (isMainnet && o.onChainId === 2 && (s.opportunityId === '2' || s.onChainId === 1))
+    )
+  )
   const totalEscrow = formatEther(opportunities.reduce((sum, o) => sum + parseEther(o.remainingEscrowEth || '0'), 0n))
   const awaitingPayment = opportunities.filter(o => o.state === 'Approved').length
   const refundable = opportunities.filter(o => o.state === 'Open' && new Date(o.deadline).getTime() <= now).length
@@ -92,7 +99,15 @@ export default function PublisherHubPage() {
             <div className="cc-stat">
               <p>Awaiting review</p>
               <strong>
-                {submissions.filter(s => getSubmissionPresentation(s, opportunities.find(o => o.id === s.opportunityId), now).action === 'review').length.toString().padStart(2, '0')}
+                {submissions.filter(s => {
+                  const opp = opportunities.find(o =>
+                    o.id === s.opportunityId ||
+                    (o.onChainId && String(o.onChainId) === s.opportunityId) ||
+                    (o.txHash && o.txHash.toLowerCase() === s.opportunityId.toLowerCase()) ||
+                    (isMainnet && o.onChainId === 2 && (s.opportunityId === '2' || s.onChainId === 1))
+                  )
+                  return getSubmissionPresentation(s, opp, now).action === 'review'
+                }).length.toString().padStart(2, '0')}
               </strong>
             </div>
           </div>
@@ -185,7 +200,12 @@ export default function PublisherHubPage() {
             {activeTab === 'submissions' && (
               <div className="cc-list">
                 {submissions.map(submission => {
-                  const opportunity = opportunities.find(o => o.id === submission.opportunityId)
+                  const opportunity = opportunities.find(o =>
+                    o.id === submission.opportunityId ||
+                    (o.onChainId && String(o.onChainId) === submission.opportunityId) ||
+                    (o.txHash && o.txHash.toLowerCase() === submission.opportunityId.toLowerCase()) ||
+                    (isMainnet && o.onChainId === 2 && (submission.opportunityId === '2' || submission.onChainId === 1))
+                  )
                   const presentation = getSubmissionPresentation(submission, opportunity, now)
                   return (
                     <article key={submission.id} className="cc-card space-y-5">

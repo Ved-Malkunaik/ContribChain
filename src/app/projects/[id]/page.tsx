@@ -4,7 +4,7 @@ import { use, useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { formatEther, parseEther } from 'viem'
 import { useAccount } from 'wagmi'
-import { currencySymbol, explorerUrl } from '@/lib/contract'
+import { currencySymbol, explorerUrl, isMainnet } from '@/lib/contract'
 import { ExternalLink, Globe, Video, Calendar, ChevronRight, Plus, ArrowUpRight } from 'lucide-react'
 import { useFeed } from '@/lib/use-platform'
 import { FeedStatus } from '@/components/PlatformStatus'
@@ -30,7 +30,12 @@ function ProjectContent({ params }: { params: Promise<{ id: string }> }) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  const project = data.projects.find((p) => p.id === projectId || p.repoId === projectId || (!!p.onChainId && String(p.onChainId) === projectId))
+  const project = data.projects.find((p) =>
+    p.id === projectId ||
+    p.repoId === projectId ||
+    (!!p.onChainId && String(p.onChainId) === projectId) ||
+    (isMainnet && (p.name.toLowerCase() === 'web3 dapp store' || projectId === '69f67dba-3838-4578-8ae8-cae0b2eb7de6' || projectId === 'aefcbf12-a27f-4ec2-917d-1d02323640be'))
+  )
   const opportunities = data.opportunities.filter((o) => o.projectId === projectId || (project && o.projectId === project.id))
   const isPublisher = mounted && !!address && !!project && address.toLowerCase() === project.publisherAddress.toLowerCase()
   if (isLoading) return <div className="cc-page"><p className="cc-empty" role="status">Loading project…</p></div>

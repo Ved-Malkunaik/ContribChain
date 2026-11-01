@@ -125,7 +125,7 @@ export async function feed() {
     'test dapp',
   ])
   const mockProjectIds = new Set(['proj-1', 'proj-2', 'proj-3', 'cmvc9booi00017aw0yi9ytmcr'])
-  const mockOppTitles = isMainnet ? new Set<string>() : new Set([
+  const mockOppTitles = new Set([
     'refactor ui components & state management',
     'enhance poll analytics & export',
     'gas-optimized twap hook with dynamic tick intervals',
@@ -139,14 +139,41 @@ export async function feed() {
     'stellarpoll feature #6',
     'stellarpoll feature #7',
   ])
-  const mockOppIds = isMainnet ? new Set(['opp-1', 'opp-2']) : new Set([
+  const mockOppIds = new Set([
     'opp-1', 'opp-2', '60405f67-d042-40da-b3e9-90b96a4a3173',
-    'onchain-opp-1', 'onchain-opp-2', 'onchain-opp-3', 'onchain-opp-4', 'onchain-opp-5', 'onchain-opp-6', 'onchain-opp-7',
+    'onchain-opp-1', 'onchain-opp-3', 'onchain-opp-4', 'onchain-opp-5', 'onchain-opp-6', 'onchain-opp-7',
   ])
 
   empty.projects = mappedProjects.filter(p => !mockProjectIds.has(p.id) && !mockProjectNames.has(p.name.toLowerCase().trim()))
-  empty.opportunities = mappedOpps.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()) && (!o.onChainId || isMainnet || o.onChainId >= 8))
-  empty.submissions = mappedSubs.filter(s => (!s.onChainId || isMainnet || s.onChainId >= 5) && !mockOppIds.has(s.opportunityId))
+  const MAINNET_PROJECT_ID = '69f67dba-3838-4578-8ae8-cae0b2eb7de6'
+  if (isMainnet && !empty.projects.some(p => p.id === MAINNET_PROJECT_ID || p.name.toLowerCase() === 'web3 dapp store')) {
+    empty.projects.push({
+      id: MAINNET_PROJECT_ID,
+      onChainId: 1,
+      name: 'Web3 dapp store',
+      shortDescription: 'Decentralized application directory and ecosystem portal for MST Blockchain.',
+      detailedDescription: 'The Web3 dapp store connects users and contributors to decentralized applications running on MST Chain. Features verified contracts, open-source bounties, and community governance.',
+      category: 'Infrastructure',
+      technologies: ['Solidity', 'TypeScript', 'React', 'Tailwind CSS'],
+      repoId: 'web3-dapp-store',
+      repoUrl: 'https://github.com/Ved-Malkunaik/Web3-dapp-store',
+      liveDappUrl: 'https://contrib-chain.vercel.app',
+      publisherAddress: '0x6b4b1b7640ed0542a5d00a774994b04478deecfc',
+      opportunitiesCount: 1,
+      createdAt: '2026-10-31T12:00:00.000Z',
+    })
+  }
+  empty.opportunities = mappedOpps.filter(o =>
+    !mockOppIds.has(o.id) &&
+    !mockOppTitles.has(o.title.toLowerCase().trim()) &&
+    (!isMainnet || o.onChainId !== 1) &&
+    (!o.onChainId || isMainnet || o.onChainId >= 8)
+  )
+  empty.submissions = mappedSubs.filter(s =>
+    (!s.onChainId || isMainnet || s.onChainId >= 5) &&
+    !mockOppIds.has(s.opportunityId) &&
+    (!isMainnet || s.opportunityId !== '1')
+  )
 
   // 2. Synchronize with live escrow contract if configured
   if (configured) {
@@ -193,8 +220,8 @@ export async function feed() {
       // Ignore RPC failure
     }
 
-    const defaultProject = empty.projects.find(p => p.name === 'StellarPoll' || p.repoUrl.includes('StellarPoll')) || empty.projects[0]
-    const defaultProjectId = defaultProject?.id || 'a20e3399-e403-4c28-8699-6987885a6b47'
+    const defaultProject = empty.projects.find(p => p.name.toLowerCase() === 'web3 dapp store' || p.name === 'StellarPoll' || p.repoUrl.includes('StellarPoll')) || empty.projects[0]
+    const defaultProjectId = defaultProject?.id || (isMainnet ? MAINNET_PROJECT_ID : 'a20e3399-e403-4c28-8699-6987885a6b47')
 
     const initialOppId = isMainnet ? 1n : 8n
     for (let i = initialOppId; i < nextOppId; i++) {
@@ -251,13 +278,15 @@ export async function feed() {
           }).catch(() => null)
 
           const snap = await db.snapshot.findFirst({ where: { hash: onChainMetadataHash } }).catch(() => null)
-          let title = dbOpp?.title || `StellarPoll Feature #${i}`
-          let description = dbOpp?.description || `Escrow bounty confirmed on ${networkName}`
+          let title = dbOpp?.title || (isMainnet && i === 2n ? 'landing page improvements' : `Bounty Task #${i}`)
+          let description = dbOpp?.description || (isMainnet && i === 2n ? 'Improve landing page UI/UX, responsive layout and contributor experience' : `Escrow bounty confirmed on ${networkName}`)
           let acceptanceCriteria = dbOpp?.acceptanceCriteria || 'Complete task criteria and merge PR on GitHub'
           let difficulty = dbOpp?.difficulty || 'intermediate'
-          let requiredSkills = dbOpp?.requiredSkills ? (() => { try { return JSON.parse(dbOpp.requiredSkills) } catch { return ['TypeScript', 'Solidity'] } })() : ['TypeScript', 'Solidity']
+          let requiredSkills = dbOpp?.requiredSkills ? (() => { try { return JSON.parse(dbOpp.requiredSkills) } catch { return ['TypeScript', 'Tailwind CSS'] } })() : ['TypeScript', 'Tailwind CSS', 'React']
           let taskType = dbOpp?.taskType || 'feature'
           let projId = dbOpp?.projectId || defaultProjectId
+          const txHash = dbOpp?.txHash || (isMainnet && i === 2n ? '0xa9cc0086f2d7ed2e13e788ce6cf089421ebb6c8400116361d143d601aa28b6e0' : undefined)
+          const oppRecordId = dbOpp?.id || (isMainnet && i === 2n ? '0xa9cc0086f2d7ed2e13e788ce6cf089421ebb6c8400116361d143d601aa28b6e0' : (snap?.id || `onchain-opp-${i}`))
 
           if (snap) {
             try {
@@ -275,7 +304,7 @@ export async function feed() {
           }
 
           const createdOpp: Opportunity = {
-            id: dbOpp?.id || snap?.id || `onchain-opp-${i}`,
+            id: oppRecordId,
             onChainId: oppIdNum,
             projectId: projId,
             publisherAddress: publisherAddr,
@@ -292,6 +321,7 @@ export async function feed() {
             selectedSubmissionId: selectedId,
             createdAt: dbOpp?.createdAt ? dbOpp.createdAt.toISOString() : new Date().toISOString(),
             metadataHash: onChainMetadataHash,
+            txHash,
           }
           empty.opportunities.push(createdOpp)
 
@@ -342,11 +372,16 @@ export async function feed() {
         const contribStatus: Submission['status'] =
           contribStatusNum === 1 ? 'Pending' : contribStatusNum === 2 ? 'Approved' : contribStatusNum === 3 ? 'Rejected' : contribStatusNum === 4 ? 'Paid' : 'Pending'
 
+        const matchedOpp = empty.opportunities.find(o => o.onChainId === Number(c[1]))
+        const oppIdToLink = matchedOpp?.id || contribOppIdStr
+
         const existingSub = empty.submissions.find(s =>
           s.onChainId === contribIdNum ||
           s.id === `contrib-${j}` ||
+          (isMainnet && contribIdNum === 1 && (s.id === '0x0ea34feb1d32c0237ec536a2837550ddb50293f1cb0b4a0adad2496b9453e' || s.txHash === '0x0ea34feb1d32c0237ec536a2837550ddb50293f1cb0b4a0adad2496b9453e')) ||
           (s.contributorAddress.toLowerCase() === contributorAddr && (
             s.opportunityId === contribOppIdStr ||
+            (matchedOpp && s.opportunityId === matchedOpp.id) ||
             empty.opportunities.find(o => o.onChainId === Number(c[1]))?.id === s.opportunityId
           ))
         )
@@ -354,32 +389,37 @@ export async function feed() {
           existingSub.onChainId = contribIdNum
           existingSub.status = contribStatus
           existingSub.contributorAddress = contributorAddr
+          if (matchedOpp && existingSub.opportunityId !== matchedOpp.id) {
+            existingSub.opportunityId = matchedOpp.id
+          }
+          if (isMainnet && contribIdNum === 1 && !existingSub.txHash) {
+            existingSub.txHash = '0x0ea34feb1d32c0237ec536a2837550ddb50293f1cb0b4a0adad2496b9453e'
+          }
         } else {
           const v = await db.verifiedSubmission.findFirst({
             where: {
               OR: [
                 { chainRef: contribIdNum.toString() },
                 { opportunityId: contribOppIdStr },
+                ...(matchedOpp ? [{ opportunityId: matchedOpp.id }] : []),
               ],
             },
           }).catch(() => null)
 
-          if (!v) continue
-
-          const repoUrl = defaultProject?.repoUrl || 'https://github.com/Ved-Malkunaik/StellarPoll'
+          const repoUrl = defaultProject?.repoUrl || (isMainnet ? 'https://github.com/Ved-Malkunaik/Web3-dapp-store' : 'https://github.com/Ved-Malkunaik/StellarPoll')
           const prNumber = v?.prNumber || 1
           const prUrl = v?.url || `${repoUrl}/pull/${prNumber}`
 
           const newSub: Submission = {
-            id: v?.id || `contrib-${j}`,
+            id: v?.id || (isMainnet && contribIdNum === 1 ? '0x0ea34feb1d32c0237ec536a2837550ddb50293f1cb0b4a0adad2496b9453e' : `contrib-${j}`),
             onChainId: contribIdNum,
-            opportunityId: contribOppIdStr,
+            opportunityId: oppIdToLink,
             contributorAddress: contributorAddr,
-            githubUsername: v?.login || 'Ved-Malkunaik',
+            githubUsername: v?.login || (contributorAddr ? `${contributorAddr.slice(0, 6)}...${contributorAddr.slice(-4)}` : 'Contributor'),
             githubPrUrl: prUrl,
             prNumber,
-            prTitle: v?.title || `Refactor Background component for improved structure #${prNumber}`,
-            prState: 'merged',
+            prTitle: v?.title || `Pull Request #${prNumber}`,
+            prState: (v?.prState as any) || 'open',
             status: contribStatus,
             notes: v?.notes || `${networkName} contribution`,
             createdAt: v?.createdAt ? v.createdAt.toISOString() : new Date().toISOString(),
@@ -388,6 +428,7 @@ export async function feed() {
             prCommit: v?.commit || '35c8e3dc36ee',
             lastSyncedAt: new Date().toISOString(),
             verifiedRecordId: v?.id || `contrib-${j}`,
+            txHash: isMainnet && contribIdNum === 1 ? '0x0ea34feb1d32c0237ec536a2837550ddb50293f1cb0b4a0adad2496b9453e' : undefined,
           }
           empty.submissions.push(newSub)
 
@@ -533,8 +574,34 @@ export async function feed() {
   }
 
   empty.projects = empty.projects.filter(p => !mockProjectIds.has(p.id) && !mockProjectNames.has(p.name.toLowerCase().trim()))
-  empty.opportunities = empty.opportunities.filter(o => !mockOppIds.has(o.id) && !mockOppTitles.has(o.title.toLowerCase().trim()) && (!o.onChainId || isMainnet || o.onChainId >= 8))
-  empty.submissions = empty.submissions.filter(s => (!s.onChainId || isMainnet || s.onChainId >= 5) && !mockOppIds.has(s.opportunityId))
+  if (isMainnet && !empty.projects.some(p => p.id === MAINNET_PROJECT_ID || p.name.toLowerCase() === 'web3 dapp store')) {
+    empty.projects.push({
+      id: MAINNET_PROJECT_ID,
+      onChainId: 1,
+      name: 'Web3 dapp store',
+      shortDescription: 'Decentralized application directory and ecosystem portal for MST Blockchain.',
+      detailedDescription: 'The Web3 dapp store connects users and contributors to decentralized applications running on MST Chain. Features verified contracts, open-source bounties, and community governance.',
+      category: 'Infrastructure',
+      technologies: ['Solidity', 'TypeScript', 'React', 'Tailwind CSS'],
+      repoId: 'web3-dapp-store',
+      repoUrl: 'https://github.com/Ved-Malkunaik/Web3-dapp-store',
+      liveDappUrl: 'https://contrib-chain.vercel.app',
+      publisherAddress: '0x6b4b1b7640ed0542a5d00a774994b04478deecfc',
+      opportunitiesCount: 1,
+      createdAt: '2026-10-31T12:00:00.000Z',
+    })
+  }
+  empty.opportunities = empty.opportunities.filter(o =>
+    !mockOppIds.has(o.id) &&
+    !mockOppTitles.has(o.title.toLowerCase().trim()) &&
+    (!isMainnet || o.onChainId !== 1) &&
+    (!o.onChainId || isMainnet || o.onChainId >= 8)
+  )
+  empty.submissions = empty.submissions.filter(s =>
+    (!s.onChainId || isMainnet || s.onChainId >= 5) &&
+    !mockOppIds.has(s.opportunityId) &&
+    (!isMainnet || s.opportunityId !== '1')
+  )
 
   // 3. Compute stats
   for (const p of empty.projects) {
@@ -543,7 +610,11 @@ export async function feed() {
     p.totalBountyEth = formatEther(open.reduce((sum, o) => sum + parseEther(o.remainingEscrowEth || '0'), 0n))
   }
   for (const o of empty.opportunities) {
-    o.submissionsCount = empty.submissions.filter(s => s.opportunityId === o.id).length
+    o.submissionsCount = empty.submissions.filter(s =>
+      s.opportunityId === o.id ||
+      (o.onChainId && String(o.onChainId) === s.opportunityId) ||
+      (o.txHash && o.txHash.toLowerCase() === s.opportunityId.toLowerCase())
+    ).length
   }
 
   empty.transactions = await db.transaction.findMany({

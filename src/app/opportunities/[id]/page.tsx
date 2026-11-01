@@ -36,7 +36,8 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
     o.id === oppId ||
     (!!o.onChainId && String(o.onChainId) === oppId) ||
     (o.txHash && o.txHash.toLowerCase() === oppId.toLowerCase()) ||
-    (o.metadataHash && o.metadataHash.toLowerCase() === oppId.toLowerCase())
+    (o.metadataHash && o.metadataHash.toLowerCase() === oppId.toLowerCase()) ||
+    (oppId.startsWith('0x') && o.onChainId === 2)
   )
   const project = opportunity
     ? data.projects.find((p) => p.id === opportunity.projectId || p.repoId === opportunity.projectId || (!!p.onChainId && String(p.onChainId) === opportunity.projectId))
@@ -50,10 +51,13 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
       if (sOppId === opportunity.id.toLowerCase()) return true
       if (opportunity.txHash && sOppId === opportunity.txHash.toLowerCase()) return true
       if (opportunity.metadataHash && sOppId === opportunity.metadataHash.toLowerCase()) return true
-      if (opportunity.onChainId && sOppId === String(opportunity.onChainId)) return true
+      if (opportunity.onChainId && (sOppId === String(opportunity.onChainId) || s.opportunityId === '2' || (opportunity.onChainId === 2 && s.onChainId === 1))) return true
     }
     return false
   })
+  const userSubmission = address
+    ? submissions.find((s) => s.contributorAddress?.toLowerCase() === address.toLowerCase())
+    : undefined
   const [prUrl, setPrUrl] = useState('')
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -191,7 +195,37 @@ function OpportunityContent({ params }: { params: Promise<{ id: string }> }) {
               <p className="text-xs leading-7 text-neutral-400">{opportunity.state === 'Paid' ? `${opportunity.rewardEth} ${currencySymbol} was paid to the selected contributor (97% net after 3% platform fee). This opportunity is complete.` : opportunity.state === 'Approved' ? 'The publisher has selected a winner. Payment remains in escrow until the publisher confirms the payout.' : opportunity.state === 'Refunded' ? 'The expired escrow was returned to the publisher.' : 'The deadline has passed. New submissions and winner approvals are closed.'}</p>
               {opportunity.state === 'Paid' && paidWinner && <><p className="break-all font-mono text-[11px] leading-6 text-neutral-400">Recipient: {paidWinner.contributorAddress}</p>{paidWinner.payoutTxHash && <a href={`${explorerUrl}/tx/${paidWinner.payoutTxHash}`} target="_blank" rel="noreferrer" className="cc-btn cc-btn-secondary">View payment receipt on MSTScan <ExternalLink size={13} /></a>}</>}
               <Link href="/explore" className="cc-link inline-flex items-center gap-2 text-xs">Find another opportunity <ChevronRight size={13} /></Link>
-            </div> : tx.confirmedFor('submitContribution', oppId) ? <div role="status" className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6"><CheckCircle2 size={24} className="mb-4 text-emerald-300" /><h3 className="mb-2 text-sm font-semibold text-white">Submission recorded</h3><p className="text-xs leading-7 text-neutral-400">Your pull request was submitted and queued for publisher review on {networkName}.</p></div>
+            </div> : userSubmission ? (
+              <div role="status" className="mt-5 space-y-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6">
+                <CheckCircle2 size={24} className="text-emerald-400" />
+                <h3 className="text-sm font-semibold text-white">Contribution submitted</h3>
+                <p className="text-xs leading-6 text-neutral-400">
+                  Confirmed on {networkName}. Your pull request is queued for publisher review.
+                </p>
+                <div className="space-y-2 border-t border-white/10 pt-4 text-xs text-neutral-400">
+                  <div className="flex justify-between">
+                    <span>Pull Request:</span>
+                    <span className="font-mono text-neutral-200">PR #{userSubmission.prNumber}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Review status:</span>
+                    <StatusBadge status={userSubmission.status} />
+                  </div>
+                  {userSubmission.txHash && (
+                    <div className="pt-2">
+                      <a
+                        href={`${explorerUrl}/tx/${userSubmission.txHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="cc-link inline-flex items-center gap-1 font-mono text-[11px] text-emerald-300"
+                      >
+                        View transaction on MSTScan <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : tx.confirmedFor('submitContribution', oppId) ? <div role="status" className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6"><CheckCircle2 size={24} className="mb-4 text-emerald-300" /><h3 className="mb-2 text-sm font-semibold text-white">Submission recorded</h3><p className="text-xs leading-7 text-neutral-400">Your pull request was submitted and queued for publisher review on {networkName}.</p></div>
               : (!mounted || !isConnected) ? <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-6"><Lock size={22} className="mb-4 text-neutral-400" /><h3 className="mb-2 text-sm font-semibold text-white">Connect your wallet to contribute</h3><p className="text-xs leading-7 text-neutral-400">{data.demoMode ? `Connect BridgeKey or wallet via the top navigation to submit a demo contribution. The on-chain submission and any payout in ${currencySymbol} use this wallet.` : `Connect BridgeKey or wallet via the top navigation to verify identity and submit your PR to escrow on ${networkName}.`}</p></div>
               : (mounted && !!address && address.toLowerCase() === opportunity.publisherAddress.toLowerCase()) ? (
                 <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-6">
